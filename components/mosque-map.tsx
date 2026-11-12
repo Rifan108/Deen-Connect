@@ -150,9 +150,16 @@ export default function MosqueMap({
       `)
     })
 
-    // If a mosque is selected, fly map to it
+    // Fit map bounds or fly to selected mosque
     if (selectedMosque) {
-      map.flyTo([selectedMosque.lat, selectedMosque.lon], 16, { duration: 1 })
+      map.flyTo([selectedMosque.lat, selectedMosque.lon], 16, { duration: 0.8 })
+    } else if (mosques.length > 0) {
+      const points: [number, number][] = [
+        [userCoords.latitude, userCoords.longitude],
+        ...mosques.map((m) => [m.lat, m.lon] as [number, number]),
+      ]
+      const bounds = L.latLngBounds(points)
+      map.fitBounds(bounds, { padding: [35, 35], maxZoom: 15 })
     }
   }, [mosques, selectedMosque, userCoords, onSelectMosque])
 

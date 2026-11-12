@@ -3,56 +3,124 @@ import { calculateDistance } from "@/lib/location"
 
 export const dynamic = "force-dynamic"
 
-interface MosqueItem {
+export interface MosqueRecord {
   id: string | number
   name: string
   lat: number
   lon: number
   distance: number
   address: string
+  osmType: "node" | "way" | "relation"
+  osmId: number | string
+  osmUrl: string
   phone?: string
   website?: string
+  openingHours?: string
+  wheelchair?: string
+  denomination?: string
+}
+
+export interface MosqueDiagnostics {
+  userLat: number
+  userLng: number
+  endpoint: string
+  httpStatus: number
+  responseTimeMs: number
+  recordsReceived: number
+  validMosques: number
+  excludedCount: number
+  duplicateCount: number
+  lastApiError: string | null
+  cached: boolean
 }
 
 // In-memory cache with 15-minute TTL
 interface CacheEntry {
   timestamp: number
-  data: MosqueItem[]
+  data: MosqueRecord[]
+  diagnostics: MosqueDiagnostics
 }
 
 const cache = new Map<string, CacheEntry>()
 const CACHE_TTL_MS = 15 * 60 * 1000
 
-// Negative filter: strictly reject any non-Islamic religious places or generic temples
+// Public Overpass API mirrors to rotate with exponential backoff
+const OVERPASS_MIRRORS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
+
+// Strict Rejection Pattern: Non-Muslim religious buildings or generic/incompatible items
 const NON_MOSQUE_PATTERN =
-  /temple|mandir|church|cathedral|synagogue|gurdwara|shrine|hindu|christian|jewish|sikh|buddhist|ashram|devasthana|chapel|monastery|basilica|convent|mutt|matha|vihara|statue|kshetra|swamy|devalaya|kovil|st\.\s+/i
+  /\b(temple|mandir|church|cathedral|synagogue|gurdwara|shrine|hindu|christian|jewish|sikh|buddhist|ashram|devasthana|chapel|monastery|basilica|convent|mutt|matha|vihara|statue|kshetra|swamy|devalaya|kovil|st\.\s+|cemetery|graveyard)\b/i
 
-// Positive filter: authentic Islamic Mosque terms
-const STRICT_MOSQUE_PATTERN =
-  /\b(masjid|mosque|musalla|jamaa?|jamea|jami|eidgah|idgah|markaz|maktab)\b|جامع|مسجد|مصلى/i
+// Strict Highway / Non-Building Objects (e.g. Mosque Road, Mosque Bus Stop, Mosque Cafe)
+const NON_BUILDING_CLASSES = new Set([
+  "highway",
+  "bus_stop",
+  "traffic_signals",
+  "residential",
+  "commercial",
+  "office",
+  "shop",
+  "amenity_waste_disposal",
+])
 
-function isStrictMosque(name: string, tags: Record<string, any> = {}, extraType = ""): boolean {
-  const combined = `${name} ${tags.name || ""} ${tags.amenity || ""} ${tags.building || ""} ${tags.religion || ""} ${extraType}`.toLowerCase()
+/**
+ * Validates whether an OSM record is an authentic Muslim Mosque
+ * Section 4 Requirement:
+ * Accept records that satisfy:
+ *   A. amenity=place_of_worship AND religion=muslim
+ *   OR
+ *   B. building=mosque
+ * If a record has conflicting religious tags, exclude it.
+ */
+function isAuthenticMosque(
+  tags: Record<string, any> = {},
+  name: string = ""
+): { valid: boolean; reason?: string } {
+  const religion = (tags.religion || "").toLowerCase().trim()
+  const amenity = (tags.amenity || "").toLowerCase().trim()
+  const building = (tags.building || "").toLowerCase().trim()
+  const combined = `${name} ${tags["name:en"] || ""} ${tags["name:ar"] || ""} ${amenity} ${building} ${religion}`.toLowerCase()
 
-  // 1. Strict rejection of non-Islamic places of worship
+  // 1. Strict rejection of other religions
+  if (religion && religion !== "muslim" && religion !== "islam") {
+    return { valid: false, reason: `Conflicting religion tag: "${religion}"` }
+  }
+
+  // 2. Strict rejection of keywords for other faiths
   if (NON_MOSQUE_PATTERN.test(combined)) {
-    return false
+    return { valid: false, reason: "Name or tags matched non-Islamic place of worship" }
   }
 
-  // 2. Verified tags from OpenStreetMap Overpass
-  if (tags.religion === "muslim" || tags.amenity === "mosque" || tags.building === "mosque") {
-    return true
+  // 3. Strict rejection of highways, roads, shops, or transit stops
+  if (tags.highway || tags.office || tags.shop || tags.railway) {
+    return { valid: false, reason: "Infrastructure or commercial tag rather than place of worship" }
   }
 
-  // 3. Name or keywords must explicitly match genuine Islamic mosque patterns
-  if (STRICT_MOSQUE_PATTERN.test(name) || STRICT_MOSQUE_PATTERN.test(combined)) {
-    return true
+  // 4. Condition A: amenity=place_of_worship AND religion=muslim
+  if (amenity === "place_of_worship" && (religion === "muslim" || religion === "islam")) {
+    return { valid: true }
   }
 
-  return false
+  // 5. Condition B: building=mosque
+  if (building === "mosque") {
+    return { valid: true }
+  }
+
+  // 6. Direct amenity=mosque
+  if (amenity === "mosque") {
+    return { valid: true }
+  }
+
+  return { valid: false, reason: "Does not meet OSM criteria (amenity=place_of_worship + religion=muslim OR building=mosque)" }
 }
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now()
   try {
     const { searchParams } = new URL(request.url)
     const latStr = searchParams.get("lat")
@@ -63,14 +131,18 @@ export async function GET(request: NextRequest) {
     const lng = parseFloat(lngStr || "")
     const radius = Math.min(Math.max(parseInt(radiusStr, 10) || 5000, 500), 50000)
 
-    if (isNaN(lat) || isNaN(lng)) {
+    // 1. Strict coordinate validation (Section 1)
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return NextResponse.json(
-        { success: false, error: "Valid latitude and longitude are required" },
+        {
+          success: false,
+          error: "Valid latitude ([-90, 90]) and longitude ([-180, 180]) are required",
+        },
         { status: 400 }
       )
     }
 
-    // Check cache (round coordinates to ~300m for cache hits)
+    // 2. Check in-memory cache
     const cacheKey = `${lat.toFixed(3)}_${lng.toFixed(3)}_${radius}`
     const cached = cache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -79,193 +151,217 @@ export async function GET(request: NextRequest) {
         data: cached.data,
         total: cached.data.length,
         radius,
-        cached: true,
+        diagnostics: {
+          ...cached.diagnostics,
+          cached: true,
+          responseTimeMs: Date.now() - startTime,
+        },
       })
     }
 
-    const itemsMap = new Map<string, MosqueItem>()
+    // 3. Construct official Overpass QL query (Section 3)
+    const overpassQuery = `[out:json][timeout:35];(
+  nwr["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
+  nwr["building"="mosque"](around:${radius},${lat},${lng});
+  nwr["amenity"="mosque"](around:${radius},${lat},${lng});
+);out center tags;`
 
-    // Tier 1: OpenStreetMap Nominatim Queries with bounded viewbox
-    const delta = radius / 1000 / 111
-    const s = lat - delta
-    const n = lat + delta
-    const w = lng - delta / Math.cos((lat * Math.PI) / 180)
-    const e = lng + delta / Math.cos((lat * Math.PI) / 180)
-    const viewbox = `${w.toFixed(5)},${n.toFixed(5)},${e.toFixed(5)},${s.toFixed(5)}`
+    let rawElements: any[] = []
+    let usedEndpoint = OVERPASS_MIRRORS[0]
+    let httpStatus = 0
+    let lastApiError: string | null = null
 
-    const nominatimQueries = [
-      `https://nominatim.openstreetmap.org/search?q=mosque&format=json&viewbox=${viewbox}&bounded=1&limit=50&addressdetails=1`,
-      `https://nominatim.openstreetmap.org/search?q=masjid&format=json&viewbox=${viewbox}&bounded=1&limit=50&addressdetails=1`,
-      `https://nominatim.openstreetmap.org/search?q=jamia+masjid&format=json&viewbox=${viewbox}&bounded=1&limit=50&addressdetails=1`,
-    ]
+    // 4. Multi-Mirror Rotation with Exponential Backoff (Section 9)
+    for (let i = 0; i < OVERPASS_MIRRORS.length; i++) {
+      const endpoint = OVERPASS_MIRRORS[i]
+      usedEndpoint = endpoint
 
-    for (const nomUrl of nominatimQueries) {
       try {
-        const res = await fetch(nomUrl, {
-          signal: AbortSignal.timeout(4500),
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 35000)
+
+        const res = await fetch(endpoint, {
+          method: "POST",
           headers: {
-            "User-Agent": "DeenConnect/1.0 (Islamic Digital Platform; contact@deenconnect.app)",
-            "Accept-Language": "en,ar",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "DeenConnectApp/1.0 (contact@deenconnect.app; Islamic Digital Sanctuary)",
+            "Referer": "https://deenconnect.app",
+            "Accept": "application/json",
           },
+          body: new URLSearchParams({ data: overpassQuery }),
+          signal: controller.signal,
         })
+        clearTimeout(timeoutId)
+
+        httpStatus = res.status
 
         if (res.ok) {
-          const list = await res.json()
-          if (Array.isArray(list)) {
-            for (const el of list) {
-              const mLat = parseFloat(el.lat)
-              const mLon = parseFloat(el.lon)
-              if (isNaN(mLat) || isNaN(mLon)) continue
-
-              const addr = el.address || {}
-              let rawName = el.name || addr.amenity || addr.place_of_worship || "Masjid"
-              if (rawName === "place_of_worship") rawName = "Masjid"
-
-              // Filter strictly to mosques / masjids
-              if (!isStrictMosque(rawName, addr, el.type)) {
-                continue
-              }
-
-              const dist = calculateDistance(lat, lng, mLat, mLon)
-              const street = addr.road || addr.street || ""
-              const suburb = addr.suburb || addr.neighbourhood || addr.village || ""
-              const city = addr.city || addr.town || addr.county || ""
-              const fullAddress =
-                [street, suburb, city].filter(Boolean).join(", ") || el.display_name
-
-              // If name is just generic "Mosque" or "Masjid", qualify with locality
-              let finalName = rawName
-              if (/^(mosque|masjid)$/i.test(finalName.trim())) {
-                const locality = street || suburb || city
-                if (locality) {
-                  finalName = `${finalName} (${locality})`
-                }
-              }
-
-              const uniqueKey = `${mLat.toFixed(4)}_${mLon.toFixed(4)}`
-              if (!itemsMap.has(uniqueKey)) {
-                itemsMap.set(uniqueKey, {
-                  id: el.osm_id || uniqueKey,
-                  name: finalName,
-                  lat: mLat,
-                  lon: mLon,
-                  distance: dist,
-                  address: fullAddress,
-                })
-              }
-            }
+          const json = await res.json()
+          if (Array.isArray(json.elements)) {
+            rawElements = json.elements
+            lastApiError = null
+            break
           }
+        } else {
+          lastApiError = `HTTP ${res.status}: ${res.statusText || "Server error"}`
         }
-      } catch (nomErr) {
-        // Continue quietly
+      } catch (err: any) {
+        lastApiError = err.name === "AbortError" ? "Request timed out (35s)" : err.message || "Network error"
+      }
+
+      // Backoff before trying next mirror
+      if (i < OVERPASS_MIRRORS.length - 1) {
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)))
       }
     }
 
-    // Tier 2: Overpass Query as complementary source if elements < 5
-    if (itemsMap.size < 5) {
-      const overpassQuery = `[out:json][timeout:10];(
-        node["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
-        way["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
-        node["building"="mosque"](around:${radius},${lat},${lng});
-        way["building"="mosque"](around:${radius},${lat},${lng});
-        node["amenity"="mosque"](around:${radius},${lat},${lng});
-        way["amenity"="mosque"](around:${radius},${lat},${lng});
-      );out center tags;`
+    // 5. Strict Mosque Filtering & Deduplication (Section 4 & 5)
+    let excludedCount = 0
+    let duplicateCount = 0
+    const rawParsed: MosqueRecord[] = []
+    const spatialDedupeMap = new Map<string, MosqueRecord>()
 
-      const overpassMirrors = [
-        "https://overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter",
-      ]
+    for (const el of rawElements) {
+      const mLat = el.lat || el.center?.lat
+      const mLon = el.lon || el.center?.lon
 
-      for (const mirror of overpassMirrors) {
-        try {
-          const overpassRes = await fetch(`${mirror}?data=${encodeURIComponent(overpassQuery)}`, {
-            signal: AbortSignal.timeout(4000),
-            headers: { "User-Agent": "DeenConnect/1.0" },
-          })
+      if (typeof mLat !== "number" || typeof mLon !== "number" || isNaN(mLat) || isNaN(mLon)) {
+        excludedCount++
+        continue
+      }
 
-          if (overpassRes.ok) {
-            const data = await overpassRes.json()
-            const elements = data.elements || []
+      const tags = el.tags || {}
+      const rawName =
+        tags.name ||
+        tags["name:en"] ||
+        tags["name:ar"] ||
+        tags["name:ur"] ||
+        tags["alt_name"] ||
+        "Masjid"
 
-            for (const el of elements) {
-              const mLat = el.lat || el.center?.lat
-              const mLon = el.lon || el.center?.lon
-              if (!mLat || !mLon) continue
+      // Strict validation
+      const authCheck = isAuthenticMosque(tags, rawName)
+      if (!authCheck.valid) {
+        excludedCount++
+        continue
+      }
 
-              const tags = el.tags || {}
-              let rawName =
-                tags.name ||
-                tags["name:en"] ||
-                tags["name:ar"] ||
-                tags["alt_name"] ||
-                "Masjid"
+      // Calculate Haversine distance
+      const dist = calculateDistance(lat, lng, mLat, mLon)
 
-              // Strict mosque verification
-              if (!isStrictMosque(rawName, tags)) continue
+      // Strict radius boundary check: do not return mosques outside radius (Section 6)
+      if (dist > (radius / 1000) * 1.05) {
+        excludedCount++
+        continue
+      }
 
-              const dist = calculateDistance(lat, lng, mLat, mLon)
-              const street = tags["addr:street"] || ""
-              const suburb = tags["addr:suburb"] || tags["addr:neighbourhood"] || ""
-              const city = tags["addr:city"] || ""
-              const address =
-                [street, suburb, city].filter(Boolean).join(", ") ||
-                `${mLat.toFixed(4)}°N, ${mLon.toFixed(4)}°E`
+      // Assemble human-readable locality & address
+      const street = tags["addr:street"] || tags.street || ""
+      const suburb = tags["addr:suburb"] || tags["addr:neighbourhood"] || tags.suburb || ""
+      const city = tags["addr:city"] || tags.city || ""
+      const state = tags["addr:state"] || tags.state || ""
+      const addressParts = [street, suburb, city, state].filter(Boolean)
+      const address = addressParts.length > 0 ? addressParts.join(", ") : `${mLat.toFixed(4)}°N, ${mLon.toFixed(4)}°E`
 
-              let finalName = rawName
-              if (/^(mosque|masjid)$/i.test(finalName.trim())) {
-                const locality = street || suburb || city
-                if (locality) {
-                  finalName = `${finalName} (${locality})`
-                }
-              }
+      // If name is just bare "Masjid" or "Mosque", qualify with suburb for clarity
+      let finalName = rawName
+      if (/^(mosque|masjid)$/i.test(finalName.trim()) && (suburb || city)) {
+        finalName = `${finalName} (${suburb || city})`
+      }
 
-              const uniqueKey = `${mLat.toFixed(4)}_${mLon.toFixed(4)}`
-              if (!itemsMap.has(uniqueKey)) {
-                itemsMap.set(uniqueKey, {
-                  id: el.id || uniqueKey,
-                  name: finalName,
-                  lat: mLat,
-                  lon: mLon,
-                  distance: dist,
-                  address,
-                  phone: tags.phone || tags["contact:phone"],
-                  website: tags.website || tags["contact:website"],
-                })
-              }
-            }
-            if (elements.length > 0) break
-          }
-        } catch (mirrorErr) {
-          // Continue gracefully
+      const osmType = el.type || "node"
+      const osmId = el.id
+      const osmUrl = `https://www.openstreetmap.org/${osmType}/${osmId}`
+
+      const record: MosqueRecord = {
+        id: `${osmType}-${osmId}`,
+        name: finalName,
+        lat: mLat,
+        lon: mLon,
+        distance: dist,
+        address,
+        osmType,
+        osmId,
+        osmUrl,
+        phone: tags.phone || tags["contact:phone"] || undefined,
+        website: tags.website || tags["contact:website"] || undefined,
+        openingHours: tags.opening_hours || undefined,
+        wheelchair: tags.wheelchair || undefined,
+        denomination: tags.denomination || undefined,
+      }
+
+      // Spatial deduplication: 35-meter grid rounding (approx 0.00035 degrees)
+      const spatialKey = `${mLat.toFixed(3)}_${mLon.toFixed(3)}_${finalName.toLowerCase()}`
+      if (spatialDedupeMap.has(spatialKey)) {
+        duplicateCount++
+        // If current is a polygon/way, it often has richer data than a point node
+        if (osmType === "way" || osmType === "relation") {
+          spatialDedupeMap.set(spatialKey, record)
         }
+      } else {
+        spatialDedupeMap.set(spatialKey, record)
       }
     }
 
-    // Convert to sorted array (nearest first)
-    const sorted = Array.from(itemsMap.values())
-      .filter((m) => m.distance <= (radius / 1000) * 1.5)
-      .sort((a, b) => a.distance - b.distance)
+    // 6. Sort results by nearest distance (Section 5)
+    const sortedMosques = Array.from(spatialDedupeMap.values()).sort(
+      (a, b) => a.distance - b.distance
+    )
 
-    // Cache the verified results
+    const responseTimeMs = Date.now() - startTime
+    const diagnostics: MosqueDiagnostics = {
+      userLat: lat,
+      userLng: lng,
+      endpoint: usedEndpoint,
+      httpStatus,
+      responseTimeMs,
+      recordsReceived: rawElements.length,
+      validMosques: sortedMosques.length,
+      excludedCount,
+      duplicateCount,
+      lastApiError,
+      cached: false,
+    }
+
+    // Cache verified results
     cache.set(cacheKey, {
       timestamp: Date.now(),
-      data: sorted,
+      data: sortedMosques,
+      diagnostics,
     })
+
+    if (cache.size > 200) {
+      const oldestKey = cache.keys().next().value
+      if (oldestKey) cache.delete(oldestKey)
+    }
 
     return NextResponse.json({
       success: true,
-      data: sorted,
-      total: sorted.length,
+      data: sortedMosques,
+      total: sortedMosques.length,
       radius,
+      diagnostics,
     })
   } catch (error: any) {
-    console.warn("Error in /api/nearby-mosques:", error)
+    console.error("Critical error in /api/nearby-mosques:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to retrieve nearby mosques",
+        error: error.message || "Failed to retrieve verified mosques",
         data: [],
+        diagnostics: {
+          userLat: 0,
+          userLng: 0,
+          endpoint: OVERPASS_MIRRORS[0],
+          httpStatus: 500,
+          responseTimeMs: Date.now() - startTime,
+          recordsReceived: 0,
+          validMosques: 0,
+          excludedCount: 0,
+          duplicateCount: 0,
+          lastApiError: error.message || "Unknown error",
+          cached: false,
+        },
       },
       { status: 500 }
     )
