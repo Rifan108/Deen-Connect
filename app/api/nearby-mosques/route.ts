@@ -85,7 +85,17 @@ export async function GET(request: NextRequest) {
 
             const dist = calculateDistance(lat, lng, mLat, mLon)
             const addr = el.address || {}
-            const name = el.name || addr.amenity || addr.place_of_worship || "Masjid / Mosque"
+            let name = el.name || addr.amenity || addr.place_of_worship || "Masjid"
+            if (name === "place_of_worship") name = "Masjid"
+
+            // Filter strictly to mosques / masjids
+            const isMosqueClass =
+              (el.class === "amenity" && (el.type === "place_of_worship" || el.type === "mosque")) ||
+              (el.class === "building" && (el.type === "mosque" || el.type === "place_of_worship")) ||
+              /masjid|mosque|جامع|مسجد/i.test(name)
+
+            if (!isMosqueClass) continue
+
             const street = addr.road || addr.street || ""
             const suburb = addr.suburb || addr.neighbourhood || addr.village || ""
             const city = addr.city || addr.town || addr.county || ""
@@ -132,7 +142,17 @@ export async function GET(request: NextRequest) {
 
               const dist = calculateDistance(lat, lng, mLat, mLon)
               const addr = el.address || {}
-              const name = el.name || "Masjid / Mosque"
+              let name = el.name || addr.amenity || addr.place_of_worship || "Masjid"
+              if (name === "place_of_worship") name = "Masjid"
+
+              // Filter strictly to actual mosques
+              const isMosqueClass =
+                (el.class === "amenity" && (el.type === "place_of_worship" || el.type === "mosque")) ||
+                (el.class === "building" && (el.type === "mosque" || el.type === "place_of_worship")) ||
+                /masjid|mosque|جامع|مسجد/i.test(name)
+
+              if (!isMosqueClass) continue
+
               const street = addr.road || addr.street || ""
               const suburb = addr.suburb || addr.neighbourhood || addr.village || ""
               const city = addr.city || addr.town || addr.county || ""
@@ -240,3 +260,4 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+

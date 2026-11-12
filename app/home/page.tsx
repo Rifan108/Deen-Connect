@@ -533,7 +533,7 @@ export default function HomePage() {
                   tag: "Lunar Dates",
                 },
                 {
-                  href: "/feature?type=mosques",
+                  href: "/mosques",
                   title: "Nearby Mosques Finder",
                   desc: "Discover local congregation centers and prayer community spaces.",
                   tag: "Community",

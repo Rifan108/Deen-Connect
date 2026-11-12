@@ -31,7 +31,7 @@ const NAV_LINKS = [
   { href: "/hadith", label: "Hadith" },
   { href: "/feature?type=prayer-times", label: "Prayer Times" },
   { href: "/feature?type=qibla", label: "Qibla" },
-  { href: "/feature?type=mosques", label: "Mosques" },
+  { href: "/mosques", label: "Mosques" },
   { href: "/feature?type=dikr-counter", label: "Tasbih" },
   { href: "/feature?type=analytics", label: "Analytics" },
   { href: "/about", label: "About" },
