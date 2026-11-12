@@ -1,0 +1,205 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Editorial Premium Islamic Identity - Light Theme (Warm Ivory & Forest Green) */
+  --background: #F7F5EF;
+  --foreground: #1D2924;
+  --card: #FFFFFF;
+  --card-foreground: #1D2924;
+  --popover: #FFFFFF;
+  --popover-foreground: #1D2924;
+
+  --primary: #123D32;
+  --primary-foreground: #F7F5EF;
+  --secondary: #174C3D;
+  --secondary-foreground: #F7F5EF;
+
+  --muted: #EDE9DF;
+  --muted-foreground: #69766E;
+
+  --accent: #C8A96B;
+  --accent-foreground: #123D32;
+
+  --destructive: #A33B32;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #E5DFD1;
+  --input: #E5DFD1;
+  --ring: #123D32;
+
+  --chart-1: #123D32;
+  --chart-2: #174C3D;
+  --chart-3: #C8A96B;
+  --chart-4: #A9B9A7;
+  --chart-5: #69766E;
+
+  --radius: 0.75rem;
+
+  /* Custom specific design tokens */
+  --forest: #123D32;
+  --emerald: #174C3D;
+  --sage: #A9B9A7;
+  --ivory: #F7F5EF;
+  --champagne: #C8A96B;
+  --text-main: #1D2924;
+  --text-muted: #69766E;
+}
+
+.dark {
+  /* Editorial Premium Islamic Identity - Dark Theme (Deep Forest Night) */
+  --background: #101A16;
+  --foreground: #F7F5EF;
+  --card: #17231D;
+  --card-foreground: #F7F5EF;
+  --popover: #17231D;
+  --popover-foreground: #F7F5EF;
+
+  --primary: #C8A96B;
+  --primary-foreground: #101A16;
+  --secondary: #223128;
+  --secondary-foreground: #F7F5EF;
+
+  --muted: #1B2922;
+  --muted-foreground: #A9B9A7;
+
+  --accent: #C8A96B;
+  --accent-foreground: #101A16;
+
+  --destructive: #C44536;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #223128;
+  --input: #223128;
+  --ring: #C8A96B;
+
+  --chart-1: #C8A96B;
+  --chart-2: #A9B9A7;
+  --chart-3: #174C3D;
+  --chart-4: #8F9E8D;
+  --chart-5: #475850;
+
+  --forest: #101A16;
+  --emerald: #17231D;
+  --sage: #A9B9A7;
+  --ivory: #F7F5EF;
+  --champagne: #C8A96B;
+  --text-main: #F7F5EF;
+  --text-muted: #A9B9A7;
+}
+
+@theme inline {
+  --font-serif: "Newsreader", "Georgia", serif;
+  --font-sans: "Plus Jakarta Sans", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-arabic: "Amiri", "Traditional Arabic", "Scheherazade New", serif;
+  --font-mono: "Geist Mono", monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased selection:bg-[#C8A96B]/25 selection:text-[#123D32];
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif tracking-tight font-normal;
+  }
+}
+
+/* Editorial typography and subtle craftsmanship utilities */
+.font-arabic {
+  font-family: "Amiri", "Traditional Arabic", serif;
+  letter-spacing: 0;
+  line-height: 1.8;
+}
+
+.editorial-title {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+
+.editorial-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 300;
+}
+
+/* Editorial rule line with subtle brass touch */
+.editorial-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(200, 169, 107, 0.4) 0%, rgba(229, 223, 209, 0.8) 50%, rgba(200, 169, 107, 0.4) 100%);
+}
+
+/* Subtle architectural paper texture / crisp border */
+.editorial-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px 0 rgba(29, 41, 36, 0.03), 0 1px 2px -1px rgba(29, 41, 36, 0.03);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.editorial-card:hover {
+  border-color: rgba(200, 169, 107, 0.45);
+  box-shadow: 0 12px 28px -4px rgba(18, 61, 50, 0.07);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #A9B9A7;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #174C3D;
+}
