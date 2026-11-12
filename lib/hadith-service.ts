@@ -270,3 +270,4 @@ export async function fetchSingleHadith(
 
   return { collection, hadith }
 }
+

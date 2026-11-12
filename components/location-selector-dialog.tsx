@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MapPin, Navigation, Search, Check, AlertCircle, Loader2 } from "lucide-react"
+import { MapPin, Navigation, Search, Check, AlertCircle, Loader2, Globe } from "lucide-react"
 
 interface LocationSelectorDialogProps {
   children?: React.ReactNode
@@ -39,7 +39,9 @@ export function LocationSelectorDialog({
     locationDetails,
     method,
     errorMessage,
+    isDetecting,
     requestGpsLocation,
+    detectIpLocation,
     setManualLocation,
     searchCities,
   } = useLocation()
@@ -48,6 +50,15 @@ export function LocationSelectorDialog({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isGpsLoading, setIsGpsLoading] = useState(false)
+
+  const handleIpClick = async () => {
+    setIsGpsLoading(true)
+    const success = await detectIpLocation()
+    setIsGpsLoading(false)
+    if (success) {
+      setIsOpen(false)
+    }
+  }
 
   // Debounced search for locations
   useEffect(() => {
@@ -117,7 +128,13 @@ export function LocationSelectorDialog({
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex items-start justify-between">
               <div className="space-y-0.5">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                  Active Location ({method === "gps" ? "Device GPS" : "Manual Selection"})
+                  Active Location (
+                  {method === "gps"
+                    ? "Device GPS"
+                    : method === "ip"
+                    ? "Network Detected"
+                    : "Manual Selection"}
+                  )
                 </span>
                 <p className="font-medium text-sm text-foreground">{locationDetails.city}, {locationDetails.country}</p>
                 <p className="text-[11px] font-mono text-muted-foreground">
@@ -130,23 +147,42 @@ export function LocationSelectorDialog({
             </div>
           )}
 
-          {/* GPS Auto-detect Button */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleGpsClick}
-            disabled={isGpsLoading}
-            className="w-full justify-center gap-2 py-5 rounded-xl border-dashed border-[#123D32]/30 dark:border-[#C8A96B]/30 hover:border-[#123D32] dark:hover:border-[#C8A96B]"
-          >
-            {isGpsLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-            ) : (
-              <Navigation className="w-4 h-4 text-[#123D32] dark:text-[#C8A96B]" />
-            )}
-            <span className="font-medium text-xs">
-              {isGpsLoading ? "Detecting Satellite Signal..." : "Detect Exact GPS Location"}
-            </span>
-          </Button>
+          {/* Quick Auto-detect Buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGpsClick}
+              disabled={isGpsLoading || isDetecting}
+              className="w-full justify-center gap-2 py-4 rounded-xl border-dashed border-[#123D32]/30 dark:border-[#C8A96B]/30 hover:border-[#123D32] dark:hover:border-[#C8A96B]"
+            >
+              {isGpsLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              ) : (
+                <Navigation className="w-4 h-4 text-[#123D32] dark:text-[#C8A96B]" />
+              )}
+              <span className="font-medium text-xs">
+                {isGpsLoading ? "Detecting..." : "Detect Device GPS"}
+              </span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleIpClick}
+              disabled={isGpsLoading || isDetecting}
+              className="w-full justify-center gap-2 py-4 rounded-xl border-dashed border-[#123D32]/30 dark:border-[#C8A96B]/30 hover:border-[#123D32] dark:hover:border-[#C8A96B]"
+            >
+              {isGpsLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              ) : (
+                <Globe className="w-4 h-4 text-[#C8A96B]" />
+              )}
+              <span className="font-medium text-xs">
+                {isGpsLoading ? "Locating..." : "Auto-detect via IP"}
+              </span>
+            </Button>
+          </div>
 
           {/* Error Message if GPS was denied or unavailable */}
           {errorMessage && (
@@ -206,3 +242,4 @@ export function LocationSelectorDialog({
     </Dialog>
   )
 }
+

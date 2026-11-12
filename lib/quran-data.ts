@@ -150,3 +150,4 @@ export function findSurah(identifier: string | number): SurahDefinition | undefi
     ALL_SURAHS.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]/g, "") === clean.replace(/[^a-z0-9]/g, ""))
   )
 }
+

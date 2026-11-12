@@ -2,14 +2,24 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { MapPin, Clock, ArrowRight, Loader2, Navigation, AlertCircle } from "lucide-react"
+import { MapPin, Clock, ArrowRight, Loader2, Navigation, AlertCircle, Globe } from "lucide-react"
 import { useLocation } from "@/lib/location-context"
 import { convertTo12Hour } from "@/lib/location"
 import { LocationSelectorDialog } from "@/components/location-selector-dialog"
 import { Button } from "@/components/ui/button"
 
 export function CompactPrayerHeroCard() {
-  const { coords, locationDetails, status, requestGpsLocation } = useLocation()
+  const {
+    coords,
+    locationDetails,
+    status,
+    method,
+    isDetecting,
+    errorMessage,
+    requestGpsLocation,
+    detectIpLocation,
+  } = useLocation()
+
   const [timings, setTimings] = useState<any>(null)
   const [hijriDate, setHijriDate] = useState<string>("1448 AH")
   const [loading, setLoading] = useState<boolean>(true)
@@ -131,7 +141,7 @@ export function CompactPrayerHeroCard() {
         <LocationSelectorDialog>
           <button
             type="button"
-            className="flex items-center gap-2 text-left group hover:opacity-90 transition"
+            className="flex items-center gap-2.5 text-left group hover:opacity-90 transition"
           >
             <div className="w-8 h-8 rounded-full bg-white/10 border border-[#C8A96B]/30 flex items-center justify-center text-[#C8A96B] shrink-0 group-hover:scale-105 transition-transform">
               <MapPin className="w-4 h-4" />
@@ -140,11 +150,27 @@ export function CompactPrayerHeroCard() {
               <p className="font-serif font-medium text-sm text-[#F7F5EF] group-hover:text-[#C8A96B] transition">
                 {locationDetails?.city || "Set Your Location"}
               </p>
-              <p className="text-[10px] font-mono text-[#A9B9A7]">
-                {coords
-                  ? `${coords.latitude.toFixed(2)}°, ${coords.longitude.toFixed(2)}° (Verified)`
-                  : "Click to enable location"}
-              </p>
+              <div className="text-[10px] font-mono text-[#A9B9A7] flex items-center gap-1.5">
+                {coords ? (
+                  <>
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full ${
+                        method === "gps"
+                          ? "bg-emerald-400 animate-pulse"
+                          : method === "ip"
+                          ? "bg-amber-400"
+                          : "bg-sky-400"
+                      }`}
+                    />
+                    <span>
+                      {coords.latitude.toFixed(2)}°, {coords.longitude.toFixed(2)}° (
+                      {method === "gps" ? "GPS" : method === "ip" ? "Network" : "Manual"})
+                    </span>
+                  </>
+                ) : (
+                  <span>Click to enable location</span>
+                )}
+              </div>
             </div>
           </button>
         </LocationSelectorDialog>
@@ -181,15 +207,45 @@ export function CompactPrayerHeroCard() {
           <p className="text-xs text-[#A9B9A7] leading-relaxed">
             Location access is required to compute verified astronomical prayer times for your exact coordinates.
           </p>
-          <div className="flex gap-2">
+
+          {errorMessage && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 pt-1">
             <Button
               size="sm"
+              disabled={isDetecting}
               onClick={() => requestGpsLocation(true)}
-              className="bg-[#C8A96B] hover:bg-[#d8bd85] text-[#101A16] rounded-full text-xs font-semibold gap-1.5"
+              className="bg-[#C8A96B] hover:bg-[#d8bd85] text-[#101A16] rounded-full text-xs font-semibold gap-1.5 shadow-sm"
             >
-              <Navigation className="w-3.5 h-3.5" />
-              Enable GPS
+              {isDetecting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Detecting...
+                </>
+              ) : (
+                <>
+                  <Navigation className="w-3.5 h-3.5" />
+                  Enable GPS
+                </>
+              )}
             </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDetecting}
+              onClick={() => detectIpLocation()}
+              className="rounded-full text-xs border-white/20 text-[#F7F5EF] hover:bg-white/10 gap-1.5"
+            >
+              <Globe className="w-3.5 h-3.5 text-[#C8A96B]" />
+              Detect via Network
+            </Button>
+
             <LocationSelectorDialog>
               <Button
                 variant="outline"

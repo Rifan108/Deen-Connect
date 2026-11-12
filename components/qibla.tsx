@@ -11,6 +11,8 @@ import {
   Smartphone,
   ShieldCheck,
   Info,
+  Loader2,
+  Globe,
 } from "lucide-react"
 import { useLocation } from "@/lib/location-context"
 import {
@@ -24,7 +26,17 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
 export default function Qibla() {
-  const { coords, locationDetails, status, accuracy, requestGpsLocation } = useLocation()
+  const {
+    coords,
+    locationDetails,
+    status,
+    accuracy,
+    method,
+    isDetecting,
+    errorMessage,
+    requestGpsLocation,
+    detectIpLocation,
+  } = useLocation()
 
   // Mathematical Qibla Bearing (0–360°)
   const qiblaBearing = useMemo(() => {
@@ -205,15 +217,43 @@ export default function Qibla() {
             <h4 className="font-serif text-lg font-medium">Verified Location Required</h4>
           </div>
           <p className="text-xs leading-relaxed max-w-xl">
-            The Qibla bearing is computed using spherical great-circle trigonometry directly to the Holy Kaaba (21.4225° N, 39.8262° E). Please enable GPS or select your city to get an accurate bearing.
+            The Qibla bearing is computed using spherical great-circle trigonometry directly to the Holy Kaaba (21.4225° N, 39.8262° E). Please enable GPS, detect via network, or select your city to get an accurate bearing.
           </p>
-          <div className="flex gap-3">
+
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs">
+              <span className="font-medium">Notice:</span> {errorMessage}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3 pt-1">
             <Button
               size="sm"
+              disabled={isDetecting}
               onClick={() => requestGpsLocation(true)}
-              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold"
+              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold gap-1.5"
             >
-              Detect Exact Coordinates
+              {isDetecting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Detecting Coordinates...
+                </>
+              ) : (
+                <>
+                  <Navigation className="w-3.5 h-3.5" />
+                  Detect Exact GPS
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDetecting}
+              onClick={() => detectIpLocation()}
+              className="rounded-full text-xs border-amber-600/30 gap-1.5"
+            >
+              <Globe className="w-3.5 h-3.5 text-[#C8A96B]" />
+              Detect via Network
             </Button>
             <LocationSelectorDialog>
               <Button variant="outline" size="sm" className="rounded-full text-xs border-amber-600/30">

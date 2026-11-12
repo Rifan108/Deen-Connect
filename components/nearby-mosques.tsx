@@ -16,6 +16,7 @@ import {
   Layers,
   Map,
   List,
+  Globe,
 } from "lucide-react"
 import { useLocation } from "@/lib/location-context"
 import { calculateDistance } from "@/lib/location"
@@ -55,7 +56,16 @@ const RADIUS_OPTIONS = [
 ]
 
 export default function NearbyMosques() {
-  const { coords, locationDetails, status, requestGpsLocation } = useLocation()
+  const {
+    coords,
+    locationDetails,
+    status,
+    method,
+    isDetecting,
+    errorMessage,
+    requestGpsLocation,
+    detectIpLocation,
+  } = useLocation()
 
   const [radius, setRadius] = useState<number>(5000) // Default 5 km
   const [mosques, setMosques] = useState<MosqueRecord[]>([])
@@ -247,13 +257,41 @@ export default function NearbyMosques() {
           <p className="text-xs leading-relaxed max-w-xl">
             To find actual registered mosques around you, we query OpenStreetMap's verified global geospatial places database around your verified coordinates.
           </p>
-          <div className="flex gap-3">
+
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs">
+              <span className="font-medium">Notice:</span> {errorMessage}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3 pt-1">
             <Button
               size="sm"
+              disabled={isDetecting}
               onClick={() => requestGpsLocation(true)}
-              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold"
+              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold gap-1.5"
             >
-              Detect Exact Coordinates
+              {isDetecting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Detecting Coordinates...
+                </>
+              ) : (
+                <>
+                  <Navigation className="w-3.5 h-3.5" />
+                  Detect Exact GPS
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDetecting}
+              onClick={() => detectIpLocation()}
+              className="rounded-full text-xs border-amber-600/30 gap-1.5"
+            >
+              <Globe className="w-3.5 h-3.5 text-[#C8A96B]" />
+              Detect via Network
             </Button>
             <LocationSelectorDialog>
               <Button variant="outline" size="sm" className="rounded-full text-xs border-amber-600/30">

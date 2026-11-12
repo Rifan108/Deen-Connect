@@ -18,6 +18,8 @@ import {
   Check,
   AlertCircle,
   Info,
+  Globe,
+  Navigation,
 } from "lucide-react"
 import { useLocation } from "@/lib/location-context"
 import { convertTo12Hour } from "@/lib/location"
@@ -57,7 +59,16 @@ export const CALCULATION_METHODS = [
 const SETTINGS_KEY = "deen_prayer_settings"
 
 export default function LocationPrayerTimes() {
-  const { coords, locationDetails, status, requestGpsLocation } = useLocation()
+  const {
+    coords,
+    locationDetails,
+    status,
+    method,
+    isDetecting,
+    errorMessage,
+    requestGpsLocation,
+    detectIpLocation,
+  } = useLocation()
 
   // Calculation settings stored in localStorage
   const [selectedMethod, setSelectedMethod] = useState<string>("3") // MWL default
@@ -282,6 +293,19 @@ export default function LocationPrayerTimes() {
                   <span className="font-serif text-base font-medium text-foreground">
                     {locationDetails?.city || "Detecting Location..."}
                   </span>
+                  {coords && (
+                    <span
+                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        method === "gps"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                          : method === "ip"
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                          : "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
+                      }`}
+                    >
+                      {method === "gps" ? "GPS" : method === "ip" ? "Network" : "Manual"}
+                    </span>
+                  )}
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground group-hover:border group-hover:border-[#C8A96B]/40 transition">
                     Change
                   </span>
@@ -404,15 +428,43 @@ export default function LocationPrayerTimes() {
             <h4 className="font-serif text-lg font-medium">Location Required for Accurate Prayer Times</h4>
           </div>
           <p className="text-xs leading-relaxed max-w-xl">
-            Islamic prayer times depend directly on your exact solar latitude and longitude. To calculate authentic timings, please allow GPS access or search for your city.
+            Islamic prayer times depend directly on your exact solar latitude and longitude. To calculate authentic timings, please allow GPS access, detect via network, or search for your city.
           </p>
-          <div className="flex items-center gap-3 pt-1">
+
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs">
+              <span className="font-medium">Notice:</span> {errorMessage}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button
               size="sm"
+              disabled={isDetecting}
               onClick={() => requestGpsLocation(true)}
-              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold"
+              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold gap-1.5"
             >
-              Detect My GPS Position
+              {isDetecting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Detecting Location...
+                </>
+              ) : (
+                <>
+                  <Navigation className="w-3.5 h-3.5" />
+                  Detect My GPS Position
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDetecting}
+              onClick={() => detectIpLocation()}
+              className="rounded-full text-xs border-amber-600/30 gap-1.5"
+            >
+              <Globe className="w-3.5 h-3.5 text-[#C8A96B]" />
+              Detect via Network
             </Button>
             <LocationSelectorDialog>
               <Button variant="outline" size="sm" className="rounded-full text-xs border-amber-600/30">
