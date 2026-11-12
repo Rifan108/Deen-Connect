@@ -97,6 +97,8 @@ export default function Qibla() {
   const enableCompassSensor = async () => {
     if (typeof window === "undefined") return
 
+    const win = window as any
+
     // iOS 13+ requires explicit permission request
     if (
       typeof (DeviceOrientationEvent as any) !== "undefined" &&
@@ -107,7 +109,7 @@ export default function Qibla() {
         if (response === "granted") {
           setPermissionState("granted")
           setSensorSupported(true)
-          window.addEventListener("deviceorientation", handleOrientation, true)
+          win.addEventListener("deviceorientation", handleOrientation, true)
         } else {
           setPermissionState("denied")
           setSensorSupported(false)
@@ -121,12 +123,12 @@ export default function Qibla() {
     }
 
     // Modern browsers with absolute orientation
-    if ("ondeviceorientationabsolute" in window) {
-      window.addEventListener("deviceorientationabsolute", handleOrientation as any, true)
+    if ("ondeviceorientationabsolute" in win) {
+      win.addEventListener("deviceorientationabsolute", handleOrientation, true)
       setSensorSupported(true)
       setPermissionState("granted")
-    } else if ("ondeviceorientation" in window) {
-      window.addEventListener("deviceorientation", handleOrientation, true)
+    } else if ("ondeviceorientation" in win) {
+      win.addEventListener("deviceorientation", handleOrientation, true)
       setSensorSupported(true)
       setPermissionState("granted")
     } else {
@@ -137,6 +139,7 @@ export default function Qibla() {
   // Attempt initial sensor attachment
   useEffect(() => {
     if (typeof window === "undefined") return
+    const win = window as any
 
     // Only auto-attach if permission is not required (e.g. Android/Chrome)
     if (
@@ -147,8 +150,8 @@ export default function Qibla() {
     }
 
     return () => {
-      window.removeEventListener("deviceorientation", handleOrientation)
-      window.removeEventListener("deviceorientationabsolute", handleOrientation as any)
+      win.removeEventListener?.("deviceorientation", handleOrientation)
+      win.removeEventListener?.("deviceorientationabsolute", handleOrientation)
     }
   }, [handleOrientation])
 
