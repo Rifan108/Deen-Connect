@@ -251,6 +251,7 @@ export function LocationSelectorDialog({
                     { name: "Mumbai, India", city: "Mumbai", state: "Maharashtra", country: "India", latitude: 19.0760, longitude: 72.8777 },
                     { name: "Dubai, UAE", city: "Dubai", country: "United Arab Emirates", latitude: 25.2048, longitude: 55.2708 },
                     { name: "London, UK", city: "London", country: "United Kingdom", latitude: 51.5074, longitude: -0.1278 },
+                    { name: "New York, NY, USA", city: "New York", state: "New York", country: "United States", latitude: 40.7128, longitude: -74.0060 },
                     { name: "Makkah, Saudi Arabia", city: "Makkah", country: "Saudi Arabia", latitude: 21.4225, longitude: 39.8262 },
                   ].map((p, idx) => (
                     <button
