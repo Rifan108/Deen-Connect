@@ -49,7 +49,7 @@ const OVERPASS_MIRRORS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://lz4.overpass-api.de/api/interpreter",
 ]
 
 // Strict Rejection Pattern: Non-Muslim religious buildings or generic/incompatible items
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Construct official Overpass QL query (Section 3)
-    const overpassQuery = `[out:json][timeout:35];(
+    const overpassQuery = `[out:json][timeout:25];(
   nwr["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
   nwr["building"="mosque"](around:${radius},${lat},${lng});
   nwr["amenity"="mosque"](around:${radius},${lat},${lng});
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
 
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 35000)
+        const timeoutId = setTimeout(() => controller.abort(), 25000)
 
         const res = await fetch(endpoint, {
           method: "POST",
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
           lastApiError = `HTTP ${res.status}: ${res.statusText || "Server error"}`
         }
       } catch (err: any) {
-        lastApiError = err.name === "AbortError" ? "Request timed out (35s)" : err.message || "Network error"
+        lastApiError = err.name === "AbortError" ? "Request timed out (25s)" : err.message || "Network error"
       }
 
       // Backoff before trying next mirror
@@ -323,12 +323,29 @@ export async function GET(request: NextRequest) {
       cached: false,
     }
 
-    // Cache verified results
-    cache.set(cacheKey, {
-      timestamp: Date.now(),
-      data: sortedMosques,
-      diagnostics,
-    })
+    // If an error occurred and no elements were returned from any mirror, do not return fake success
+    if (lastApiError && rawElements.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: lastApiError,
+          data: [],
+          total: 0,
+          radius,
+          diagnostics,
+        },
+        { status: httpStatus >= 400 ? httpStatus : 503 }
+      )
+    }
+
+    // Cache verified results only on genuine successful responses
+    if (httpStatus === 200 && !lastApiError) {
+      cache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: sortedMosques,
+        diagnostics,
+      })
+    }
 
     if (cache.size > 200) {
       const oldestKey = cache.keys().next().value

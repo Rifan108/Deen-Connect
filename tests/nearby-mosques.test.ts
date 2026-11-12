@@ -13,7 +13,10 @@ const TEST_CITIES = [
 
 describe("Nearby Mosques Live API Verification", () => {
   for (const city of TEST_CITIES) {
-    it(`should return verified mosques for ${city.name} sorted by distance without non-Muslim sites`, async () => {
+    it(
+      `should return verified mosques for ${city.name} sorted by distance without non-Muslim sites`,
+      { timeout: 120000 },
+      async () => {
       const url = `${BASE_URL}/api/nearby-mosques?lat=${city.lat}&lng=${city.lng}&radius=${city.radius}`
       const res = await fetch(url)
 
