@@ -261,7 +261,7 @@ export default function NearbyMosques() {
         <div className="flex items-center justify-between px-1">
           <div className="space-y-0.5">
             <h3 className="font-serif text-xl font-normal text-foreground">
-              Verified Mosques & Musallas
+              Verified Mosque Locations
             </h3>
             <p className="text-xs text-muted-foreground">
               {loading ? (

@@ -35,10 +35,10 @@ export default function MosquesPage() {
             <span>Mosque Locator</span>
           </div>
           <h1 className="font-serif text-3xl sm:text-4xl font-normal text-foreground">
-            Nearby Mosques & Musallas
+            Nearby Mosque Locations
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Locate authentic registered Masjids and prayer halls in your vicinity, check distances, view coordinates, and get turn-by-turn driving or walking directions.
+            Locate authentic registered Masjids in your vicinity, check exact distances, view coordinates, and get turn-by-turn driving or walking directions.
           </p>
         </div>
 
@@ -48,3 +48,4 @@ export default function MosquesPage() {
     </div>
   )
 }
+
