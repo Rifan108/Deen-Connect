@@ -69,7 +69,7 @@ export async function GET(
     // Fetch page verses and recitation audio from official Quran Foundation API
     const [versesRes, audioRes] = await Promise.all([
       fetch(
-        `https://api.quran.com/api/v4/verses/by_page/${pageNum}?words=false&translations=131&fields=text_uthmani,chapter_id,verse_number,verse_key,juz_number,page_number`,
+        `https://api.quran.com/api/v4/verses/by_page/${pageNum}?words=false&translations=20&fields=text_uthmani,chapter_id,verse_number,verse_key,juz_number,page_number`,
         {
           signal: AbortSignal.timeout(8000),
           headers: { "Accept": "application/json" },

@@ -454,15 +454,25 @@ export function QuranMushafReader({ initialPage = 1, onPageChange }: QuranMushaf
                         return (
                           <div
                             key={`trans-${v.verseKey}`}
-                            className={`pt-3 flex items-start justify-between gap-4 p-2 rounded-xl transition ${
-                              isVerseActive ? "bg-emerald-500/10 border border-emerald-500/20" : ""
+                            className={`pt-3.5 pb-2 flex items-start justify-between gap-4 p-3.5 rounded-2xl transition border border-transparent ${
+                              isVerseActive
+                                ? "bg-emerald-500/10 border-emerald-500/30 shadow-xs"
+                                : "hover:bg-muted/40 hover:border-border/60"
                             }`}
                           >
-                            <div className="space-y-1">
-                              <span className="font-mono text-[11px] text-[#C8A96B] font-semibold">
-                                {v.verseKey}
-                              </span>
-                              <p className="font-sans text-xs sm:text-sm text-foreground/90 leading-relaxed">
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-[#C8A96B]/15 text-[#C8A96B] font-semibold border border-[#C8A96B]/30">
+                                  {v.verseKey}
+                                </span>
+                              </div>
+                              <p
+                                className="font-arabic text-xl sm:text-2xl text-foreground text-right leading-relaxed"
+                                dir="rtl"
+                              >
+                                {v.textUthmani}
+                              </p>
+                              <p className="font-sans text-xs sm:text-sm text-foreground/90 dark:text-muted-foreground leading-relaxed pt-0.5">
                                 {v.translation}
                               </p>
                             </div>
