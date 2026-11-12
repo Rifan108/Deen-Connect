@@ -152,7 +152,7 @@ export default function LocationPrayerTimes() {
         setTimezone(data.meta.timezone)
       }
     } catch (e: any) {
-      console.error("Failed to fetch prayer times:", e)
+      console.warn("Notice while retrieving prayer times:", e)
       setErrorMsg("Unable to retrieve verified prayer calculations. Please check your internet connection.")
     } finally {
       setLoading(false)

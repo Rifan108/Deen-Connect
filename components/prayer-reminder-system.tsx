@@ -77,8 +77,8 @@ export default function PrayerReminderSystem() {
 
       // Get calculation method from localStorage
       const method = typeof window !== "undefined" ? localStorage.getItem("deen_connect_method") || "2" : "2"
-      // Fetch fresh from API
-      const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${lat}&longitude=${lon}&method=${method}`
+      // Fetch from internal resilient API
+      const url = `/api/prayer-times?lat=${lat}&lng=${lon}&method=${method}&school=0`
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
         const data = await res.json()

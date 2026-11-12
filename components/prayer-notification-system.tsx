@@ -25,7 +25,7 @@ export default function PrayerNotificationSystem() {
         const day = String(today.getDate()).padStart(2, "0")
 
         const response = await fetch(
-          `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=24.7136&longitude=46.6753&method=2`,
+          `/api/prayer-times?lat=24.7136&lng=46.6753&method=2&school=0`,
         )
         const data = await response.json()
 
