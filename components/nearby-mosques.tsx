@@ -222,7 +222,7 @@ export default function NearbyMosques() {
             <Button
               size="sm"
               disabled={isDetecting}
-              onClick={() => requestGpsLocation(true)}
+              onClick={() => requestGpsLocation()}
               className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold gap-1.5"
             >
               {isDetecting ? (

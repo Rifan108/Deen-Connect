@@ -153,14 +153,14 @@ export async function searchLocationsQuery(query: string): Promise<LocationSugge
 
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
     query.trim()
-  )}&limit=6&accept-language=en&addressdetails=1`
+  )}&limit=8&accept-language=en&addressdetails=1`
 
   const res = await fetch(url, {
     headers: {
       "User-Agent": "DeenConnect/1.0 (Islamic Digital Sanctuary; contact@deenconnect.app)",
       "Accept-Language": "en",
     },
-    signal: AbortSignal.timeout(5000),
+    signal: AbortSignal.timeout(6000),
   })
 
   if (!res.ok) return []
@@ -187,9 +187,9 @@ export async function searchLocationsQuery(query: string): Promise<LocationSugge
       latitude: lat,
       longitude: lon,
       city,
-      district: address.suburb || address.neighbourhood,
-      state: address.state,
-      country: address.country,
+      district: address.suburb || address.neighbourhood || address.district,
+      state: address.state || address.region,
+      country: address.country || "",
     }
   })
 }

@@ -187,8 +187,31 @@ export default function Qibla() {
           </LocationSelectorDialog>
         </div>
 
-        {/* Sensor Status / Activation */}
-        <div className="flex items-center gap-2">
+        {/* Sensor Status / Activation & Location Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {coords && (
+            <>
+              {method !== "gps" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isDetecting}
+                  onClick={() => requestGpsLocation()}
+                  className="rounded-full text-xs gap-1.5 border-border"
+                >
+                  <Navigation className="w-3.5 h-3.5 text-primary" />
+                  Use GPS
+                </Button>
+              )}
+              <LocationSelectorDialog>
+                <Button variant="outline" size="sm" className="rounded-full text-xs gap-1.5 border-border">
+                  <MapPin className="w-3.5 h-3.5 text-[#C8A96B]" />
+                  Change City
+                </Button>
+              </LocationSelectorDialog>
+            </>
+          )}
+
           {sensorSupported === false ? (
             <span className="text-[11px] font-mono px-3 py-1 rounded-full bg-muted text-muted-foreground border border-border">
               Static Direction Mode (No Sensor)
@@ -233,7 +256,7 @@ export default function Qibla() {
             <Button
               size="sm"
               disabled={isDetecting}
-              onClick={() => requestGpsLocation(true)}
+              onClick={() => requestGpsLocation()}
               className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold gap-1.5"
             >
               {isDetecting ? (

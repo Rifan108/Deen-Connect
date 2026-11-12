@@ -17,6 +17,7 @@ import {
 import { SiteNav } from "@/components/site-nav"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { QuranMushafReader, JUZ_PAGE_START } from "@/components/quran-mushaf-reader"
 import { ALL_SURAHS, type SurahDefinition } from "@/lib/quran-data"
 import { useAudioPlayer } from "@/components/audio-context"
 
@@ -55,7 +56,8 @@ const JUZ_MAPPINGS = [
 
 export default function QuranLandingPage() {
   const [search, setSearch] = useState("")
-  const [activeTab, setActiveTab] = useState<"surahs" | "juz" | "bookmarks">("surahs")
+  const [activeTab, setActiveTab] = useState<"pages" | "surahs" | "juz" | "bookmarks">("pages")
+  const [lastReadPage, setLastReadPage] = useState<number>(1)
   const [lastRead, setLastRead] = useState<{ surahNum: number; ayahNum: number; timestamp: number } | null>(null)
   const [bookmarks, setBookmarks] = useState<number[]>([])
 
@@ -64,6 +66,9 @@ export default function QuranLandingPage() {
   // Load last read & bookmarks
   useEffect(() => {
     try {
+      const savedPage = localStorage.getItem("quran_last_read_page")
+      if (savedPage) setLastReadPage(parseInt(savedPage, 10) || 1)
+
       const savedLast = localStorage.getItem("deen_last_read_ayah")
       if (savedLast) setLastRead(JSON.parse(savedLast))
 
@@ -129,45 +134,55 @@ export default function QuranLandingPage() {
           </div>
 
           {/* Continue Reading Card if available */}
-          {lastReadSurahObj && (
-            <div className="p-5 rounded-3xl bg-gradient-to-r from-[#123D32] to-[#174C3D] text-[#F7F5EF] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-white/10 border border-[#C8A96B]/30 flex items-center justify-center text-[#C8A96B] shrink-0">
-                  <Bookmark className="w-5 h-5 fill-[#C8A96B]" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#A9B9A7]">
-                    Continue Reading
-                  </span>
-                  <h3 className="font-serif text-lg font-medium">
-                    Surah {lastReadSurahObj.name} • Verse {lastRead?.ayahNum || 1}
-                  </h3>
-                  <p className="text-xs text-[#A9B9A7]">
-                    {lastReadSurahObj.englishName} ({lastReadSurahObj.versesCount} Ayahs)
-                  </p>
-                </div>
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-[#123D32] to-[#174C3D] text-[#F7F5EF] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-white/10 border border-[#C8A96B]/30 flex items-center justify-center text-[#C8A96B] shrink-0">
+                <Bookmark className="w-5 h-5 fill-[#C8A96B]" />
               </div>
-
-              <Link href={`/quran/${lastReadSurahObj.slug}`}>
-                <Button
-                  size="sm"
-                  className="rounded-full bg-[#C8A96B] hover:bg-[#d8bd85] text-[#101A16] font-semibold text-xs gap-1.5 shadow-sm"
-                >
-                  <span>Resume Reading</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#A9B9A7]">
+                  Continue Reading
+                </span>
+                <h3 className="font-serif text-lg font-medium">
+                  Madani Mushaf • Page {lastReadPage}
+                </h3>
+                <p className="text-xs text-[#A9B9A7]">
+                  Standard 604-page Quran with authentic Uthmani script & audio
+                </p>
+              </div>
             </div>
-          )}
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setActiveTab("pages")}
+                className="rounded-full bg-[#C8A96B] hover:bg-[#d8bd85] text-[#101A16] font-semibold text-xs gap-1.5 shadow-sm"
+              >
+                <span>Read Page {lastReadPage}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
 
           {/* Search & Tabs Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-            {/* Tabs */}
-            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/60 border border-border text-xs">
+            {/* Tabs: Pages (1-604), Surahs (114), Juz (30), Bookmarks */}
+            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/60 border border-border text-xs overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTab("pages")}
+                className={`px-4 py-1.5 rounded-xl font-medium transition shrink-0 ${
+                  activeTab === "pages"
+                    ? "bg-[#123D32] text-[#F7F5EF] dark:bg-[#C8A96B] dark:text-[#101A16] shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Mushaf Pages (1–604)
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("surahs")}
-                className={`px-4 py-1.5 rounded-xl font-medium transition ${
+                className={`px-4 py-1.5 rounded-xl font-medium transition shrink-0 ${
                   activeTab === "surahs"
                     ? "bg-[#123D32] text-[#F7F5EF] dark:bg-[#C8A96B] dark:text-[#101A16] shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
@@ -178,7 +193,7 @@ export default function QuranLandingPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab("juz")}
-                className={`px-4 py-1.5 rounded-xl font-medium transition ${
+                className={`px-4 py-1.5 rounded-xl font-medium transition shrink-0 ${
                   activeTab === "juz"
                     ? "bg-[#123D32] text-[#F7F5EF] dark:bg-[#C8A96B] dark:text-[#101A16] shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
@@ -189,7 +204,7 @@ export default function QuranLandingPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab("bookmarks")}
-                className={`px-4 py-1.5 rounded-xl font-medium transition ${
+                className={`px-4 py-1.5 rounded-xl font-medium transition shrink-0 ${
                   activeTab === "bookmarks"
                     ? "bg-[#123D32] text-[#F7F5EF] dark:bg-[#C8A96B] dark:text-[#101A16] shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
@@ -200,23 +215,32 @@ export default function QuranLandingPage() {
             </div>
 
             {/* Search Input */}
-            <div className="relative sm:w-80">
-              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search by name, English or number..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-full bg-card border border-border focus:outline-hidden focus:border-[#C8A96B] text-foreground"
-              />
-            </div>
+            {activeTab !== "pages" && (
+              <div className="relative sm:w-80">
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by name, English or number..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-full bg-card border border-border focus:outline-hidden focus:border-[#C8A96B] text-foreground"
+                />
+              </div>
+            )}
           </div>
         </div>
       </section>
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 w-full">
-        {/* 1. Surahs Grid View */}
+        {/* 1. Mushaf 604-Page Reader */}
+        {activeTab === "pages" && (
+          <div className="space-y-6">
+            <QuranMushafReader initialPage={lastReadPage} />
+          </div>
+        )}
+
+        {/* 2. Surahs Grid View */}
         {activeTab === "surahs" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredSurahs.map((surah) => {
@@ -297,27 +321,30 @@ export default function QuranLandingPage() {
           </div>
         )}
 
-        {/* 2. Juz Grid View */}
+        {/* 3. Juz Grid View */}
         {activeTab === "juz" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {JUZ_MAPPINGS.map((j) => (
-              <Card key={j.juz} className="p-5 rounded-3xl bg-card border border-border space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-serif text-lg font-medium">{j.label}</span>
-                  <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground">
-                    Part {j.juz}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">Starts at: {j.surah}</p>
-                <div className="pt-2">
-                  <Link href={`/quran/${j.juz <= 1 ? "al-fatihah" : "al-baqarah"}`}>
-                    <Button variant="outline" size="sm" className="w-full rounded-xl text-xs">
-                      Open in Reader
-                    </Button>
-                  </Link>
-                </div>
-              </Card>
-            ))}
+            {JUZ_MAPPINGS.map((j) => {
+              const startPage = JUZ_PAGE_START[j.juz - 1] || 1
+              return (
+                <Card key={j.juz} className="p-5 rounded-3xl bg-card border border-border space-y-3 hover:border-[#C8A96B]/50 transition">
+                  <div className="flex items-center justify-between">
+                    <span className="font-serif text-lg font-medium">{j.label}</span>
+                    <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      Page {startPage}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Starts at: {j.surah}</p>
+                  <div className="pt-2">
+                    <Link href={`/quran/page/${startPage}`}>
+                      <Button variant="outline" size="sm" className="w-full rounded-xl text-xs hover:bg-[#123D32] hover:text-[#F7F5EF] dark:hover:bg-[#C8A96B] dark:hover:text-[#101A16] transition">
+                        Open Juz {j.juz} (Page {startPage}) →
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              )
+            })}
           </div>
         )}
 

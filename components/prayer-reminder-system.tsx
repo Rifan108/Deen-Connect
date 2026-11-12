@@ -162,7 +162,7 @@ export default function PrayerReminderSystem() {
   }
 
   const requestLocationPermission = async () => {
-    const success = await requestGpsLocation(true)
+    const success = await requestGpsLocation()
     if (success) {
       setLocationEnabled(true)
     }

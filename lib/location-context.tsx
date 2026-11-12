@@ -33,7 +33,7 @@ interface LocationContextType {
   errorMessage: string | null
   isReady: boolean
   isDetecting: boolean
-  requestGpsLocation: (highAccuracy?: boolean) => Promise<boolean>
+  requestGpsLocation: () => Promise<boolean>
   detectIpLocation: () => Promise<boolean>
   setManualLocation: (suggestion: LocationSuggestion) => Promise<void>
   searchCities: (query: string) => Promise<LocationSuggestion[]>
@@ -77,36 +77,109 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Detect location via Network IP (Fast, resilient fallback)
+  // Request browser GPS position per strict specifications
+  const requestGpsLocation = useCallback(async (): Promise<boolean> => {
+    if (typeof window === "undefined") return false
+
+    if (!navigator.geolocation) {
+      setStatus("unavailable")
+      setErrorMessage("Geolocation is not supported by your browser or device. Please select your location manually.")
+      setIsReady(true)
+      return false
+    }
+
+    setIsDetecting(true)
+    setStatus("detecting")
+    setErrorMessage(null)
+
+    return new Promise<boolean>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy: acc } = position.coords
+          const newCoords = { latitude, longitude }
+
+          setCoords(newCoords)
+          setAccuracy(acc)
+          setMethod("gps")
+
+          try {
+            const details = await reverseGeocodeCoordinates(latitude, longitude)
+            setLocationDetails(details)
+            persistLocation(newCoords, details, "gps", acc)
+            toast.success(`GPS Location verified: ${details.city || "Coordinates detected"}`, {
+              description: `Coordinates: ${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E (±${Math.round(acc)}m)`,
+            })
+          } catch (err) {
+            const fallbackDetails: LocationDetails = {
+              city: `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`,
+              country: "",
+              displayName: `${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E`,
+            }
+            setLocationDetails(fallbackDetails)
+            persistLocation(newCoords, fallbackDetails, "gps", acc)
+          }
+
+          setStatus("detected")
+          setIsReady(true)
+          setIsDetecting(false)
+          resolve(true)
+        },
+        (error) => {
+          let errorState: LocationStatus = "error"
+          let msg = "Could not detect location. Please select manually."
+
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorState = "permission-denied"
+              msg = "Location permission was denied in your browser. To enable it: click the lock/tune icon in your browser's address bar, set Location to 'Allow', and click Retry."
+              break
+            case error.POSITION_UNAVAILABLE:
+              errorState = "unavailable"
+              msg = "Location signal is unavailable from your device sensors. Please verify system location permissions or select your city manually."
+              break
+            case error.TIMEOUT:
+              errorState = "unavailable"
+              msg = "Location request timed out after 15 seconds. Please click Retry or search for your city manually."
+              break
+          }
+
+          setStatus(errorState)
+          setErrorMessage(msg)
+          setIsReady(true)
+          setIsDetecting(false)
+          resolve(false)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        }
+      )
+    })
+  }, [])
+
+  // Optional network IP fallback (invoked explicitly or as secondary choice)
   const detectIpLocation = useCallback(async (): Promise<boolean> => {
     try {
       setIsDetecting(true)
       setStatus("detecting")
       setErrorMessage(null)
 
-      // Try internal Next.js API proxy first
       let resolvedData: any = null
 
       try {
-        const res = await fetch("/api/ip-location", {
-          signal: AbortSignal.timeout(5000),
-        })
+        const res = await fetch("/api/ip-location", { signal: AbortSignal.timeout(5000) })
         if (res.ok) {
           const json = await res.json()
-          if (json.success && json.coords) {
-            resolvedData = json
-          }
+          if (json.success && json.coords) resolvedData = json
         }
-      } catch (err) {
-        console.warn("Local /api/ip-location route failed, trying direct public IP API...", err)
+      } catch (e) {
+        console.warn("Internal ip-location proxy failed, trying public IP fallback...", e)
       }
 
-      // If internal proxy failed, fallback to direct client call to freeipapi
       if (!resolvedData) {
         try {
-          const directRes = await fetch("https://freeipapi.com/api/json", {
-            signal: AbortSignal.timeout(5000),
-          })
+          const directRes = await fetch("https://freeipapi.com/api/json", { signal: AbortSignal.timeout(5000) })
           if (directRes.ok) {
             const data = await directRes.json()
             const lat = parseFloat(data.latitude)
@@ -119,7 +192,6 @@ export function LocationProvider({ children }: { children: ReactNode }) {
                 coords: { latitude: lat, longitude: lon },
                 locationDetails: {
                   city,
-                  district: "",
                   state,
                   country,
                   displayName: [city, state, country].filter(Boolean).join(", "),
@@ -127,12 +199,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
               }
             }
           }
-        } catch (directErr) {
-          console.warn("Direct freeipapi client fetch failed:", directErr)
-        }
+        } catch {}
       }
 
-      // If resolved
       if (resolvedData?.coords) {
         const newCoords = resolvedData.coords
         const details = resolvedData.locationDetails
@@ -146,16 +215,18 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         setIsDetecting(false)
 
         persistLocation(newCoords, details, "ip", null)
+        toast.info(`Location detected via network: ${details.city}`, {
+          description: "You can click 'Search City' to refine with exact coordinates.",
+        })
         return true
       }
 
       setStatus("unavailable")
-      setErrorMessage("Network location unavailable. Please select your city manually.")
+      setErrorMessage("Network location unavailable. Please choose your city manually.")
       setIsReady(true)
       setIsDetecting(false)
       return false
-    } catch (e: any) {
-      console.error("IP location detection error:", e)
+    } catch {
       setStatus("unavailable")
       setErrorMessage("Could not detect location. Please search for your city.")
       setIsReady(true)
@@ -164,134 +235,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Request browser GPS position with intelligent multi-stage fallback
-  const requestGpsLocation = useCallback(
-    async (highAccuracy = false): Promise<boolean> => {
-      if (typeof window === "undefined") return false
-
-      setIsDetecting(true)
-      setStatus("detecting")
-      setErrorMessage(null)
-
-      // If browser doesn't have geolocation at all
-      if (!navigator.geolocation) {
-        console.warn("Browser geolocation unsupported, falling back to IP...")
-        const ipSuccess = await detectIpLocation()
-        if (ipSuccess) {
-          toast.info("Device GPS unsupported. Location detected via your network connection.")
-        }
-        return ipSuccess
-      }
-
-      // Helper function to query browser geolocation
-      const attemptBrowserGeo = (useHighAcc: boolean, timeoutMs: number): Promise<GeolocationPosition> => {
-        return new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: useHighAcc,
-            timeout: timeoutMs,
-            maximumAge: 60000,
-          })
-        })
-      }
-
-      try {
-        let position: GeolocationPosition | null = null
-
-        // Attempt 1: Fast Wi-Fi / cell triangulation (low accuracy, works reliably on laptops)
-        try {
-          position = await attemptBrowserGeo(false, 5000)
-        } catch (firstErr: any) {
-          console.warn("Low-accuracy geolocation failed, checking high-accuracy...", firstErr)
-
-          // If permission explicitly denied by user, don't keep polling browser
-          if (firstErr?.code === 1 /* PERMISSION_DENIED */) {
-            console.warn("User or browser denied location permission. Falling back to IP...")
-            const ipSuccess = await detectIpLocation()
-            if (ipSuccess) {
-              toast.info("Browser location permission was denied. Location detected via network IP.", {
-                description: "You can click 'Search City' to refine your exact location.",
-              })
-              return true
-            } else {
-              setStatus("permission-denied")
-              setErrorMessage("Location permission was denied. Please select your location manually.")
-              setIsReady(true)
-              setIsDetecting(false)
-              return false
-            }
-          }
-
-          // Attempt 2: Try high accuracy (satellite GPS lock, works on mobile)
-          try {
-            position = await attemptBrowserGeo(true, 5000)
-          } catch (secondErr) {
-            console.warn("High-accuracy geolocation also failed:", secondErr)
-          }
-        }
-
-        // If browser geolocation succeeded
-        if (position?.coords) {
-          const { latitude, longitude, accuracy: acc } = position.coords
-          const newCoords = { latitude, longitude }
-
-          setCoords(newCoords)
-          setAccuracy(acc)
-          setMethod("gps")
-
-          try {
-            const details = await reverseGeocodeCoordinates(latitude, longitude)
-            setLocationDetails(details)
-            persistLocation(newCoords, details, "gps", acc)
-            toast.success(`Exact GPS located: ${details.city || "Current Location"}`, {
-              description: `Accuracy: ±${Math.round(acc)}m`,
-            })
-          } catch (err) {
-            const fallbackDetails: LocationDetails = {
-              city: `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`,
-              country: "",
-              displayName: `${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E`,
-            }
-            setLocationDetails(fallbackDetails)
-            persistLocation(newCoords, fallbackDetails, "gps", acc)
-          }
-
-          setStatus("detected")
-          setIsReady(true)
-          setIsDetecting(false)
-          return true
-        }
-
-        // If both browser attempts failed (typical on desktop without GPS or Windows Location disabled)
-        console.warn("Browser GPS unavailable on this device. Triggering IP geolocation fallback...")
-        const ipSuccess = await detectIpLocation()
-        if (ipSuccess) {
-          toast.info("Device GPS signal unavailable. Location detected via network connection.", {
-            description: "Click 'Search City' if you need to adjust coordinates.",
-          })
-          return true
-        }
-
-        setStatus("unavailable")
-        setErrorMessage("Location signal unavailable. Please choose your city manually.")
-        setIsReady(true)
-        setIsDetecting(false)
-        return false
-      } catch (err: any) {
-        console.error("Unexpected error in requestGpsLocation:", err)
-        const ipSuccess = await detectIpLocation()
-        if (ipSuccess) return true
-
-        setStatus("error")
-        setErrorMessage("Could not detect location. Please select manually.")
-        setIsReady(true)
-        setIsDetecting(false)
-        return false
-      }
-    },
-    [detectIpLocation]
-  )
-
-  // Restore cached location on initial mount or auto-detect via IP
+  // Restore cached location on initial mount or query permission
   useEffect(() => {
     if (typeof window === "undefined") return
 
@@ -315,30 +259,38 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       console.warn("Failed to read cached location", e)
     }
 
-    // If no cached location, check permissions first
+    // Check browser permission status
     if (navigator?.permissions?.query) {
       navigator.permissions
         .query({ name: "geolocation" as PermissionName })
         .then((result) => {
           if (cancelled) return
           if (result.state === "granted") {
-            requestGpsLocation(false)
+            requestGpsLocation()
+          } else if (result.state === "denied") {
+            setStatus("permission-denied")
+            setErrorMessage("Location permission is currently blocked in your browser settings. Please allow location or select your city manually.")
+            setIsReady(true)
           } else {
-            // Auto-detect via IP silently on first visit so user gets immediate prayer times
-            detectIpLocation()
+            setStatus("permission-required")
+            setIsReady(true)
           }
         })
         .catch(() => {
-          if (!cancelled) detectIpLocation()
+          if (!cancelled) {
+            setStatus("permission-required")
+            setIsReady(true)
+          }
         })
     } else {
-      detectIpLocation()
+      setStatus("permission-required")
+      setIsReady(true)
     }
 
     return () => {
       cancelled = true
     }
-  }, [detectIpLocation, requestGpsLocation])
+  }, [requestGpsLocation])
 
   // Set location manually from geocoded suggestion
   const setManualLocation = useCallback(async (suggestion: LocationSuggestion) => {
@@ -366,7 +318,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     setIsReady(true)
 
     persistLocation(newCoords, details, "manual", null)
-    toast.success(`Location set: ${details.city}`)
+    toast.success(`Location set: ${details.city}`, {
+      description: `Coordinates: ${suggestion.latitude.toFixed(4)}°N, ${suggestion.longitude.toFixed(4)}°E`,
+    })
   }, [])
 
   // City search powered by geocoding
@@ -374,7 +328,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     return await searchLocationsQuery(query)
   }, [])
 
-  // Clear location
+  // Clear / Switch location
   const clearLocation = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY)

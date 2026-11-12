@@ -219,7 +219,7 @@ export function CompactPrayerHeroCard() {
             <Button
               size="sm"
               disabled={isDetecting}
-              onClick={() => requestGpsLocation(true)}
+              onClick={() => requestGpsLocation()}
               className="bg-[#C8A96B] hover:bg-[#d8bd85] text-[#101A16] rounded-full text-xs font-semibold gap-1.5 shadow-sm"
             >
               {isDetecting ? (

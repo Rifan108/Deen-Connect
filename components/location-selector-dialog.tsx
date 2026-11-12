@@ -91,7 +91,7 @@ export function LocationSelectorDialog({
 
   const handleGpsClick = async () => {
     setIsGpsLoading(true)
-    const success = await requestGpsLocation(true)
+    const success = await requestGpsLocation()
     setIsGpsLoading(false)
     if (success) {
       setIsOpen(false)
@@ -234,6 +234,35 @@ export function LocationSelectorDialog({
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Quick City Presets */}
+            {suggestions.length === 0 && !query && (
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-mono uppercase text-muted-foreground">Quick Select City</span>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {[
+                    { name: "Mysuru, Karnataka, India", city: "Mysuru", state: "Karnataka", country: "India", latitude: 12.2958, longitude: 76.6394 },
+                    { name: "Mangaluru, Karnataka, India", city: "Mangaluru", state: "Karnataka", country: "India", latitude: 12.9141, longitude: 74.8560 },
+                    { name: "Bengaluru, Karnataka, India", city: "Bengaluru", state: "Karnataka", country: "India", latitude: 12.9716, longitude: 77.5946 },
+                    { name: "Kozhikode, Kerala, India", city: "Kozhikode", state: "Kerala", country: "India", latitude: 11.2588, longitude: 75.7804 },
+                    { name: "Delhi, India", city: "Delhi", state: "Delhi", country: "India", latitude: 28.6139, longitude: 77.2090 },
+                    { name: "Mumbai, India", city: "Mumbai", state: "Maharashtra", country: "India", latitude: 19.0760, longitude: 72.8777 },
+                    { name: "Dubai, UAE", city: "Dubai", country: "United Arab Emirates", latitude: 25.2048, longitude: 55.2708 },
+                    { name: "London, UK", city: "London", country: "United Kingdom", latitude: 51.5074, longitude: -0.1278 },
+                    { name: "Makkah, Saudi Arabia", city: "Makkah", country: "Saudi Arabia", latitude: 21.4225, longitude: 39.8262 },
+                  ].map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSuggestion(p)}
+                      className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-muted text-[11px] text-foreground border border-border transition"
+                    >
+                      {p.city}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
