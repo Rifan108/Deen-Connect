@@ -24,7 +24,7 @@ export interface Coordinates {
   longitude: number
 }
 
-interface LocationContextType {
+export interface LocationContextType {
   status: LocationStatus
   coords: Coordinates | null
   locationDetails: LocationDetails | null
@@ -35,6 +35,12 @@ interface LocationContextType {
   isDetecting: boolean
   isWatching: boolean
   lastUpdated: number | null
+  // Diagnostics
+  lastErrorCode: number | null
+  lastErrorMessage: string | null
+  isSecureContext: boolean
+  permissionState: "granted" | "denied" | "prompt" | "unknown"
+  geolocationAvailable: boolean
   requestGpsLocation: () => Promise<boolean>
   startWatchingGps: () => void
   stopWatchingGps: () => void
@@ -61,7 +67,15 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const [isWatching, setIsWatching] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
 
+  // Developer GPS Diagnostics
+  const [lastErrorCode, setLastErrorCode] = useState<number | null>(null)
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null)
+  const [isSecureCtx, setIsSecureCtx] = useState<boolean>(true)
+  const [permissionState, setPermissionState] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown")
+  const [geoAvailable, setGeoAvailable] = useState<boolean>(true)
+
   const watchIdRef = useRef<number | null>(null)
+  const isRequestingRef = useRef<boolean>(false)
 
   // Persist location to localStorage
   const persistLocation = (
@@ -129,51 +143,75 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     return true
   }
 
-  // Request browser GPS position with high-accuracy and smart Wi-Fi fallback
+  // Request browser GPS position with high-accuracy (30s) and smart Wi-Fi fallback (15s)
   const requestGpsLocation = useCallback(async (): Promise<boolean> => {
     if (typeof window === "undefined") return false
 
-    // 1. Verify secure context
-    if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    // Prevent duplicate concurrent requests
+    if (isRequestingRef.current) return false
+    isRequestingRef.current = true
+
+    // Check secure context
+    const secure = window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    setIsSecureCtx(secure)
+    if (!secure) {
       setStatus("unavailable")
       setErrorMessage(
         "Browser Geolocation is restricted to HTTPS origins or localhost. Please access via https:// or select your city manually."
       )
+      setLastErrorCode(null)
+      setLastErrorMessage("Insecure context: navigator.geolocation requires HTTPS")
       setIsReady(true)
       setIsDetecting(false)
+      isRequestingRef.current = false
       return false
     }
 
-    // 2. Verify navigator.geolocation API
-    if (!navigator.geolocation) {
+    // Check navigator.geolocation API availability
+    const available = !!navigator.geolocation
+    setGeoAvailable(available)
+    if (!available) {
       setStatus("unavailable")
       setErrorMessage("Geolocation API is not supported by your browser. Please search and select your city manually.")
+      setLastErrorCode(null)
+      setLastErrorMessage("navigator.geolocation is undefined")
       setIsReady(true)
       setIsDetecting(false)
+      isRequestingRef.current = false
       return false
+    }
+
+    // Query browser permission status
+    if (navigator?.permissions?.query) {
+      try {
+        const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName })
+        setPermissionState(perm.state as any)
+      } catch {}
     }
 
     setIsDetecting(true)
     setStatus("detecting")
     setErrorMessage(null)
+    setLastErrorCode(null)
+    setLastErrorMessage(null)
 
-    // Tier 1: Try High-Accuracy satellite GPS (timeout 9s)
+    // Tier 1: Satellite High-Accuracy GPS (timeout: 30000ms, maximumAge: 0)
     const tryHighAccuracy = (): Promise<GeolocationPosition> => {
       return new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 9000,
+          timeout: 30000,
           maximumAge: 0,
         })
       })
     }
 
-    // Tier 2: Try Low-Accuracy Wi-Fi / Cell tower triangulation (timeout 8s)
+    // Tier 2: Controlled Fallback with Low-Accuracy Wi-Fi / Cell Positioning (timeout: 15000ms, maximumAge: 60000)
     const tryLowAccuracy = (): Promise<GeolocationPosition> => {
       return new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: false,
-          timeout: 8000,
+          timeout: 15000,
           maximumAge: 60000,
         })
       })
@@ -181,42 +219,62 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
     try {
       const pos = await tryHighAccuracy()
-      return await handlePositionSuccess(pos, "gps")
+      setLastErrorCode(null)
+      setLastErrorMessage(null)
+      setPermissionState("granted")
+      const result = await handlePositionSuccess(pos, "gps")
+      isRequestingRef.current = false
+      return result
     } catch (err1: any) {
-      // If permission was denied by user, do not retry - report directly
+      setLastErrorCode(err1.code || null)
+      setLastErrorMessage(err1.message || "GPS request failed")
+
+      // If user denied permission (Code 1), stop immediately and explain how to restore in browser settings
       if (err1.code === err1.PERMISSION_DENIED) {
+        setPermissionState("denied")
         setStatus("permission-denied")
         setErrorMessage(
-          "Location permission was denied. To enable it: click the padlock/tune icon in your browser's address bar, set Location to 'Allow', and click Retry."
+          "Location permission was denied (Error 1). To enable it: click the padlock/tune icon in your browser address bar, set Location to 'Allow', and click Retry."
         )
         setIsReady(true)
         setIsDetecting(false)
+        isRequestingRef.current = false
         return false
       }
 
-      // If timed out or hardware GPS unavailable, attempt Tier 2 Wi-Fi positioning
+      // If timed out (Code 3) or hardware GPS unavailable (Code 2), attempt Tier 2 Wi-Fi fallback
       try {
         const pos2 = await tryLowAccuracy()
-        return await handlePositionSuccess(pos2, "gps")
+        setLastErrorCode(null)
+        setLastErrorMessage(null)
+        setPermissionState("granted")
+        const result = await handlePositionSuccess(pos2, "gps")
+        isRequestingRef.current = false
+        return result
       } catch (err2: any) {
+        setLastErrorCode(err2.code || null)
+        setLastErrorMessage(err2.message || "Low accuracy positioning also failed")
+
         let errorState: LocationStatus = "unavailable"
         let msg = "Could not retrieve GPS coordinates. Please select your city manually."
 
         if (err2.code === err2.PERMISSION_DENIED) {
+          setPermissionState("denied")
           errorState = "permission-denied"
-          msg = "Location permission is blocked in browser settings. Please allow location access or choose your city manually."
+          msg = "Location permission is blocked in browser settings (Error 1: PERMISSION_DENIED). Click the padlock icon in the address bar to permit location."
         } else if (err2.code === err2.TIMEOUT) {
           errorState = "unavailable"
-          msg = "Location request timed out. Your device GPS could not obtain a satellite lock. Please click Retry or select your city manually."
+          msg = "Location request timed out (Error 3: TIMEOUT). The device took too long to acquire coordinates. Please click Retry or select your city manually."
         } else if (err2.code === err2.POSITION_UNAVAILABLE) {
           errorState = "unavailable"
-          msg = "Location signal unavailable from device sensors. Verify that device location services are enabled in OS settings, or choose your city manually."
+          msg = "Location signal unavailable (Error 2: POSITION_UNAVAILABLE). Device location services may be turned off in Windows/system settings. Please enable them or select your city manually."
         }
 
         setStatus(errorState)
         setErrorMessage(msg)
         setIsReady(true)
         setIsDetecting(false)
+        isRequestingRef.current = false
         return false
       }
     }
@@ -468,6 +526,11 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         isDetecting,
         isWatching,
         lastUpdated,
+        lastErrorCode,
+        lastErrorMessage,
+        isSecureContext: isSecureCtx,
+        permissionState,
+        geolocationAvailable: geoAvailable,
         requestGpsLocation,
         startWatchingGps,
         stopWatchingGps,

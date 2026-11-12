@@ -35,10 +35,18 @@ export default function Qibla() {
     method,
     isDetecting,
     errorMessage,
+    lastErrorCode,
+    lastErrorMessage,
+    isSecureContext,
+    permissionState,
+    geolocationAvailable,
+    lastUpdated,
     requestGpsLocation,
     detectIpLocation,
     retryLocation,
   } = useLocation()
+
+  const [showDiagnostics, setShowDiagnostics] = useState(false)
 
   // 1. Exact Great-Circle Geographic Qibla Bearing (0–360°)
   const qiblaBearing = useMemo(() => {
@@ -571,6 +579,106 @@ export default function Qibla() {
               <p>
                 Hold your device flat in the palm of your hand. If compass heading appears unstable or inaccurate, wave the phone in a gentle figure-8 motion away from metal laptops, magnetic cases, and electronic interference.
               </p>
+            </div>
+
+            {/* Phase 2: Developer GPS & Geolocation Diagnostic Panel */}
+            <div className="p-4 rounded-2xl bg-card border border-border/80 text-xs space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-semibold text-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  GPS Developer Diagnostic System
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowDiagnostics((prev) => !prev)}
+                  className="text-[11px] font-mono text-[#C8A96B] hover:underline"
+                >
+                  {showDiagnostics ? "Hide Details" : "Show Full Diagnostics"}
+                </button>
+              </div>
+
+              {/* Status Pills */}
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                <div className="p-2 rounded-xl bg-muted/60 flex items-center justify-between">
+                  <span className="text-muted-foreground">Secure Context:</span>
+                  <span className={isSecureContext ? "text-emerald-500 font-bold" : "text-destructive font-bold"}>
+                    {isSecureContext ? "Yes (HTTPS/Local)" : "No (Insecure)"}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/60 flex items-center justify-between">
+                  <span className="text-muted-foreground">Permission:</span>
+                  <span className="font-bold uppercase text-foreground">
+                    {permissionState}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/60 flex items-center justify-between">
+                  <span className="text-muted-foreground">API Available:</span>
+                  <span className={geolocationAvailable ? "text-emerald-500 font-bold" : "text-destructive font-bold"}>
+                    {geolocationAvailable ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-muted/60 flex items-center justify-between">
+                  <span className="text-muted-foreground">Request State:</span>
+                  <span className="font-bold uppercase text-foreground">
+                    {status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detailed Breakdown when expanded */}
+              {showDiagnostics && (
+                <div className="pt-2 border-t border-border/60 space-y-2 text-[11px] font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Latitude:</span>
+                    <span className="text-foreground">{coords ? coords.latitude.toFixed(6) : "None"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Longitude:</span>
+                    <span className="text-foreground">{coords ? coords.longitude.toFixed(6) : "None"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">GPS Accuracy:</span>
+                    <span className="text-foreground">{accuracy ? `±${Math.round(accuracy)} metres` : "N/A (Manual/IP)"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Location Source:</span>
+                    <span className="text-foreground">{method || "None"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Updated:</span>
+                    <span className="text-foreground">{lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "Never"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Error Code:</span>
+                    <span className="text-foreground">{lastErrorCode !== null ? `Error ${lastErrorCode}` : "None (0)"}</span>
+                  </div>
+                  {lastErrorMessage && (
+                    <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-[11px]">
+                      {lastErrorMessage}
+                    </div>
+                  )}
+
+                  {/* Standard Error Explanations & Recovery */}
+                  {lastErrorCode === 1 && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+                      <p className="font-bold">Error 1: PERMISSION_DENIED</p>
+                      <p>The browser was denied access to location hardware. Recovery: Click the site settings / padlock icon in the URL bar, toggle Location to 'Allow', and click 'Retry GPS'.</p>
+                    </div>
+                  )}
+                  {lastErrorCode === 2 && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+                      <p className="font-bold">Error 2: POSITION_UNAVAILABLE</p>
+                      <p>The device cannot fix satellite or network position. Recovery: Verify that location services are switched ON in Windows/macOS/phone system settings.</p>
+                    </div>
+                  )}
+                  {lastErrorCode === 3 && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+                      <p className="font-bold">Error 3: TIMEOUT</p>
+                      <p>Satellite lock took over 30 seconds. The application automatically retries with Wi-Fi positioning fallback.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -101,25 +101,22 @@ export default function SurahDetailPage({
 
     const fetchSurah = async () => {
       try {
-        const url = `https://api.alquran.cloud/v1/surah/${surahMeta.number}/editions/quran-uthmani,en.sahih`
+        const url = `/api/quran/surah/${surahMeta.number}`
         const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
 
         if (!res.ok) throw new Error(`Quran API status ${res.status}`)
 
         const json = await res.json()
-        if (!json.data || json.data.length < 2) {
+        if (!json.success || !Array.isArray(json.ayahs) || json.ayahs.length === 0) {
           throw new Error("Invalid response from Quran content service")
         }
 
-        const uthmaniEdition = json.data[0].ayahs
-        const englishEdition = json.data[1].ayahs
-
-        const combined: AyahItem[] = uthmaniEdition.map((item: any, idx: number) => {
+        const combined: AyahItem[] = json.ayahs.map((item: any) => {
           return {
             number: item.number,
             numberInSurah: item.numberInSurah,
-            arabic: item.text,
-            translation: englishEdition[idx]?.text || "",
+            arabic: item.arabic,
+            translation: item.translation || "",
           }
         })
 

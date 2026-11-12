@@ -52,48 +52,46 @@ export default function QuranSurahReader() {
     } catch {}
   }, [])
 
-  // Fetch Surah Arabic + English translation
+  // Fetch Surah Arabic + English translation via resilient server proxy
   useEffect(() => {
+    let cancelled = false
     const fetchSurah = async () => {
       setLoading(true)
       setError("")
       try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 8000)
-
-        const res = await fetch(
-          `https://api.alquran.cloud/v1/surah/${currentSurahNum}/editions/quran-uthmani,en.sahih`,
-          { signal: controller.signal }
-        )
-        clearTimeout(timeout)
+        const res = await fetch(`/api/quran/surah/${currentSurahNum}`, {
+          signal: AbortSignal.timeout(10000),
+        })
 
         if (!res.ok) throw new Error("Could not fetch surah")
         const json = await res.json()
 
-        if (json.status === "OK" && json.data && json.data.length >= 2) {
-          const uthmani = json.data[0].ayahs
-          const sahih = json.data[1].ayahs
-
-          const paired: AyahPair[] = uthmani.map((a: any, idx: number) => ({
+        if (!cancelled && json.success && Array.isArray(json.ayahs) && json.ayahs.length > 0) {
+          const paired: AyahPair[] = json.ayahs.map((a: any) => ({
             number: a.number,
             numberInSurah: a.numberInSurah,
-            arabic: a.text,
-            translation: sahih[idx]?.text || "",
+            arabic: a.arabic,
+            translation: a.translation,
           }))
 
           setAyahs(paired)
-        } else {
+        } else if (!cancelled) {
           throw new Error("Invalid structure")
         }
       } catch (err: any) {
-        console.warn("Failed fetching dual edition, falling back to basic", err)
-        setError("Could not load Surah text. Please check your network connection.")
+        console.warn("Failed fetching Surah from server proxy:", err)
+        if (!cancelled) {
+          setError("Could not load Surah text. Please check your network connection.")
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchSurah()
+    return () => {
+      cancelled = true
+    }
   }, [currentSurahNum])
 
   const toggleBookmark = (ayahNumber: number) => {
