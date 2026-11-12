@@ -285,17 +285,17 @@ export default function ProgressAnalytics() {
 
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={prayerStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={prayerStats} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(169, 185, 167, 0.2)" />
                   <XAxis dataKey="day" stroke="#69766E" fontSize={11} tickLine={false} />
                   <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} stroke="#69766E" fontSize={11} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(200, 169, 107, 0.08)", radius: 6 }} />
                   <Bar
                     dataKey="completed"
                     name="Prayers Completed"
-                    fill="var(--color-primary)"
+                    fill="#C8A96B"
                     radius={[6, 6, 0, 0]}
-                    maxBarSize={44}
+                    maxBarSize={36}
                   />
                 </BarChart>
               </ResponsiveContainer>
