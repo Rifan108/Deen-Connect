@@ -74,7 +74,7 @@ export default function NearbyMosques() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"split" | "map" | "list">("split")
 
-  // Fetch real mosques from OpenStreetMap Overpass API
+  // Fetch real mosques from internal API proxy (with Nominatim & Overpass failover)
   const fetchMosques = useCallback(async () => {
     if (!coords) {
       setMosques([])
@@ -87,85 +87,39 @@ export default function NearbyMosques() {
 
     try {
       const { latitude, longitude } = coords
-      const query = `
-        [out:json][timeout:15];
-        (
-          node["amenity"="mosque"](around:${radius},${latitude},${longitude});
-          node["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${latitude},${longitude});
-          way["amenity"="mosque"](around:${radius},${latitude},${longitude});
-          way["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${latitude},${longitude});
-          relation["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${latitude},${longitude});
-        );
-        out center;
-      `
-      const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query.trim())}`
-
-      const res = await fetch(url, { signal: AbortSignal.timeout(14000) })
+      const res = await fetch(
+        `/api/nearby-mosques?lat=${latitude}&lng=${longitude}&radius=${radius}`
+      )
       if (!res.ok) {
-        throw new Error(`Overpass API server status ${res.status}`)
+        throw new Error(`Server responded with HTTP ${res.status}`)
       }
 
       const json = await res.json()
-      const elements = json.elements || []
+      const items: MosqueRecord[] = (json.data || []).map((el: any) => ({
+        id: el.id,
+        name: el.name,
+        distance: el.distance,
+        address: el.address,
+        phone: el.phone,
+        website: el.website,
+        lat: el.lat,
+        lon: el.lon,
+      }))
 
-      const items: MosqueRecord[] = elements
-        .map((el: any) => {
-          const lat = el.lat || el.center?.lat
-          const lon = el.lon || el.center?.lon
-          if (!lat || !lon) return null
-
-          const dist = calculateDistance(latitude, longitude, lat, lon)
-          const tags = el.tags || {}
-
-          const name =
-            tags.name ||
-            tags["name:en"] ||
-            tags["name:ar"] ||
-            tags["alt_name"] ||
-            "Masjid / Muslim Community Center"
-
-          const street = tags["addr:street"] || ""
-          const suburb = tags["addr:suburb"] || tags["addr:neighbourhood"] || ""
-          const city = tags["addr:city"] || locationDetails?.city || ""
-          const housenumber = tags["addr:housenumber"] || ""
-
-          let address = [housenumber, street, suburb, city].filter(Boolean).join(", ")
-          if (!address) {
-            address = `Coordinates: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`
-          }
-
-          const phone = tags.phone || tags["contact:phone"]
-          const website = tags.website || tags["contact:website"]
-
-          return {
-            id: el.id,
-            name,
-            distance: dist,
-            address,
-            phone,
-            website,
-            lat,
-            lon,
-          }
-        })
-        .filter((item: MosqueRecord | null): item is MosqueRecord => item !== null)
-
-      // Deduplicate by proximity and sort closest first
-      items.sort((a, b) => a.distance - b.distance)
       setMosques(items)
 
       if (items.length > 0) {
         setSelectedMosque(items[0])
       }
     } catch (err: any) {
-      console.error("Error querying mosques:", err)
+      console.warn("Could not query nearby mosques:", err)
       setErrorMsg(
-        "Could not load nearby mosques from the geospatial registry. Please verify your connection or try again."
+        "Could not load nearby mosques for this radius. Please try widening your search distance or refresh."
       )
     } finally {
       setLoading(false)
     }
-  }, [coords, radius, locationDetails?.city])
+  }, [coords, radius])
 
   useEffect(() => {
     fetchMosques()
@@ -372,6 +326,20 @@ export default function NearbyMosques() {
           {/* List Column */}
           {(viewMode === "split" || viewMode === "list") && (
             <div className={viewMode === "split" ? "lg:col-span-5 space-y-3" : "lg:col-span-12 space-y-3"}>
+              {errorMsg && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-3">
+                  <span>{errorMsg}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={fetchMosques}
+                    className="rounded-full text-xs shrink-0 h-7"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+
               {loading ? (
                 <div className="p-8 text-center space-y-3 bg-card border border-border rounded-3xl">
                   <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#C8A96B]" />
