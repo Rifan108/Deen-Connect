@@ -44,12 +44,12 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>()
 const CACHE_TTL_MS = 15 * 60 * 1000
 
-// Public Overpass API mirrors to rotate with exponential backoff
+// Public Overpass API mirrors to rotate with exponential backoff (Primary: high-speed OSM France)
 const OVERPASS_MIRRORS = [
+  "https://overpass.openstreetmap.fr/api/interpreter",
+  "https://lz4.overpass-api.de/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter",
-  "https://lz4.overpass-api.de/api/interpreter",
 ]
 
 // Strict Rejection Pattern: Non-Muslim religious buildings or generic/incompatible items
@@ -159,12 +159,15 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 3. Construct official Overpass QL query (Section 3)
-    const overpassQuery = `[out:json][timeout:25];(
-  nwr["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
-  nwr["building"="mosque"](around:${radius},${lat},${lng});
-  nwr["amenity"="mosque"](around:${radius},${lat},${lng});
-);out center tags;`
+    // 3. Construct official Overpass QL query with quad-tile optimization (Section 3)
+    const overpassQuery = `[out:json][timeout:20];(
+  node["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
+  way["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lng});
+  node["building"="mosque"](around:${radius},${lat},${lng});
+  way["building"="mosque"](around:${radius},${lat},${lng});
+  node["amenity"="mosque"](around:${radius},${lat},${lng});
+  way["amenity"="mosque"](around:${radius},${lat},${lng});
+);out center tags qt;`
 
     let rawElements: any[] = []
     let usedEndpoint = OVERPASS_MIRRORS[0]
