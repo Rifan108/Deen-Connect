@@ -13,6 +13,7 @@ const QuranSurahReader = dynamic(() => import("@/components/quran-surah-reader")
 const ZakatCalculator = dynamic(() => import("@/components/zakat-calculator"), { ssr: false })
 const HajjUmrahGuide = dynamic(() => import("@/components/hajj-umrah-guide"), { ssr: false })
 const DailyQuote = dynamic(() => import("@/components/daily-quote"), { ssr: false })
+const HadithExplorerFeature = dynamic(() => import("@/components/hadith-explorer-feature"), { ssr: false })
 const MemorizationTracker = dynamic(() => import("@/components/memorization-tracker"), { ssr: false })
 const PrayerTracker = dynamic(() => import("@/components/prayer-tracker"), { ssr: false })
 const PrayerStreakTracker = dynamic(() => import("@/components/prayer-streak-tracker"), { ssr: false })
@@ -267,7 +268,7 @@ function FeatureContentComponent() {
       case "hajj":
         return <HajjUmrahGuide />
       case "hadith":
-        return <DailyQuote />
+        return <HadithExplorerFeature />
       case "memorization":
         return <MemorizationTracker />
       case "prayer-tracker":

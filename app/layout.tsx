@@ -1,14 +1,11 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { LocationProvider } from "@/lib/location-context"
 import { AudioPlayerProvider } from "@/components/audio-context"
 import { PersistentAudioPlayer } from "@/components/persistent-audio-player"
 import { Toaster } from "@/components/ui/sonner"
-
-const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
 
 export const metadata: Metadata = {
   title: "Deen Connect — A Sanctuary for Quran, Prayer & Spiritual Practice",
@@ -34,13 +31,15 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-background text-foreground`}>
+      <body className="font-sans antialiased min-h-screen bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-          <AudioPlayerProvider>
-            {children}
-            <PersistentAudioPlayer />
-            <Toaster position="bottom-right" richColors />
-          </AudioPlayerProvider>
+          <LocationProvider>
+            <AudioPlayerProvider>
+              {children}
+              <PersistentAudioPlayer />
+              <Toaster position="bottom-right" richColors />
+            </AudioPlayerProvider>
+          </LocationProvider>
         </ThemeProvider>
       </body>
     </html>

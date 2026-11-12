@@ -17,17 +17,22 @@ import {
   Moon,
   Volume2,
   ChevronRight,
+  MapPin,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAudioPlayer } from "@/components/audio-context"
+import { useLocation } from "@/lib/location-context"
+import { LocationSelectorDialog } from "@/components/location-selector-dialog"
 import { Button } from "@/components/ui/button"
 
 const NAV_LINKS = [
   { href: "/home", label: "Overview" },
-  { href: "/feature?type=quran", label: "Quran" },
+  { href: "/quran", label: "Quran" },
+  { href: "/hadith", label: "Hadith" },
   { href: "/feature?type=prayer-times", label: "Prayer Times" },
+  { href: "/feature?type=qibla", label: "Qibla" },
+  { href: "/feature?type=mosques", label: "Mosques" },
   { href: "/feature?type=dikr-counter", label: "Tasbih" },
-  { href: "/feature?type=zakat", label: "Tools" },
   { href: "/feature?type=analytics", label: "Analytics" },
   { href: "/about", label: "About" },
 ]
@@ -39,6 +44,7 @@ export function SiteNav() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const { isPlaying, currentSurah, toggleMinimize, isPlayerVisible } = useAudioPlayer()
+  const { locationDetails, status } = useLocation()
 
   useEffect(() => {
     setMounted(true)
@@ -96,6 +102,19 @@ export function SiteNav() {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-3">
+            {/* Global Location Pill */}
+            <LocationSelectorDialog>
+              <button
+                type="button"
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-xs text-muted-foreground hover:text-foreground hover:border-[#C8A96B]/50 transition bg-card/60 shadow-xs"
+                title="Change or view detected location"
+              >
+                <MapPin className="w-3.5 h-3.5 text-[#C8A96B] shrink-0" />
+                <span className="font-sans font-medium line-clamp-1 max-w-[120px]">
+                  {locationDetails?.city || "Set Location"}
+                </span>
+              </button>
+            </LocationSelectorDialog>
             {/* Audio Indicator if audio playing */}
             {isPlayerVisible && (
               <button
@@ -166,8 +185,21 @@ export function SiteNav() {
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </Link>
               ))}
-              <div className="pt-3 mt-2 border-t border-border flex gap-2">
-                <Link href="/dashboard" className="flex-1" onClick={() => setMobileOpen(false)}>
+              <div className="pt-3 mt-2 border-t border-border flex flex-col gap-2">
+                <LocationSelectorDialog>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between rounded-xl text-xs font-medium border-border"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-[#C8A96B]" />
+                      <span>Location: {locationDetails?.city || "Set Location"}</span>
+                    </span>
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground">Change</span>
+                  </Button>
+                </LocationSelectorDialog>
+
+                <Link href="/dashboard" className="w-full" onClick={() => setMobileOpen(false)}>
                   <Button className="w-full bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-xl text-xs font-medium">
                     Open Spiritual Dashboard
                   </Button>

@@ -36,6 +36,8 @@ export function PersistentAudioPlayer() {
     isPlayerVisible,
     isMinimized,
     audioError,
+    activeMode,
+    currentAyahNumber,
     togglePlay,
     seekTo,
     setVolumeLevel,
@@ -154,6 +156,11 @@ export function PersistentAudioPlayer() {
                   <div className="flex items-center gap-2">
                     <h4 className="font-serif font-semibold text-[#F7F5EF] text-sm truncate">
                       {currentSurah.name}
+                      {activeMode === "ayah" && currentAyahNumber !== null && (
+                        <span className="text-[#C8A96B] font-mono text-xs ml-1.5 font-normal">
+                          (Ayah {currentAyahNumber})
+                        </span>
+                      )}
                     </h4>
                     <span className="text-[11px] font-serif text-[#C8A96B] font-arabic" dir="rtl">
                       {currentSurah.arabicName}

@@ -1,440 +1,395 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import React, { useState, useEffect, useMemo, useCallback } from "react"
+import {
+  Compass,
+  MapPin,
+  Navigation,
+  CheckCircle2,
+  AlertCircle,
+  RotateCw,
+  Smartphone,
+  ShieldCheck,
+  Info,
+} from "lucide-react"
+import { useLocation } from "@/lib/location-context"
+import {
+  calculateQibla,
+  calculateDistanceToKaaba,
+  getCompassDirection,
+  KAABA_COORDINATES,
+} from "@/lib/location"
+import { LocationSelectorDialog } from "@/components/location-selector-dialog"
 import { Button } from "@/components/ui/button"
-import { Compass, AlertCircle, CheckCircle, RefreshCw, Smartphone, Sliders, Search, MapPin } from "lucide-react"
-import { getUserLocation, calculateQibla, calculateDistance, getCompassDirection, searchLocations, setCachedLocation, getCachedLocation, type LocationSuggestion } from "@/lib/location"
-
-interface Coords {
-  latitude: number
-  longitude: number
-  city?: string
-  country?: string
-  method?: "gps" | "ip" | "manual"
-}
+import { Card } from "@/components/ui/card"
 
 export default function Qibla() {
-  const [qiblaAngle, setQiblaAngle] = useState(0)
-  const [deviceHeading, setDeviceHeading] = useState(0)
-  const [location, setLocation] = useState<Coords | null>(null)
-  const [locationError, setLocationError] = useState<string>("")
-  const [loading, setLoading] = useState(true)
+  const { coords, locationDetails, status, accuracy, requestGpsLocation } = useLocation()
 
-  // Compass sensor permissions and state
-  const [sensorPermission, setSensorPermission] = useState<"default" | "granted" | "denied">("default")
-  const [sensorActive, setSensorActive] = useState(false)
-  const [requiresInteraction, setRequiresInteraction] = useState(false)
-  const [simulatedMode, setSimulatedMode] = useState(false)
-  const [simulatedHeading, setSimulatedHeading] = useState(0)
+  // Mathematical Qibla Bearing (0–360°)
+  const qiblaBearing = useMemo(() => {
+    if (!coords) return 0
+    return calculateQibla(coords.latitude, coords.longitude)
+  }, [coords])
 
-  // Location search states
-  const [searchQuery, setSearchQuery] = useState("")
-  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
-  const [searching, setSearching] = useState(false)
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [locationSource, setLocationSource] = useState<"gps" | "ip" | "manual">("gps")
+  const distanceToKaaba = useMemo(() => {
+    if (!coords) return 0
+    return Math.round(calculateDistanceToKaaba(coords.latitude, coords.longitude))
+  }, [coords])
 
-  const loadLocation = async (forceFresh = false) => {
-    setLoading(true)
-    try {
-      const coords = await getUserLocation({ ignoreCache: forceFresh })
-      setLocation(coords)
-      const angle = calculateQibla(coords.latitude, coords.longitude)
-      setQiblaAngle(angle)
-      setLocationSource(coords.method || "gps")
-      setLocationError("")
-    } catch (error: any) {
-      console.warn("Geolocation denied or failed, falling back to default.", error)
-      const fallback = { latitude: 21.4225, longitude: 39.8262, city: "Mecca", country: "Saudi Arabia", method: "ip" as const }
-      setLocation(fallback)
-      setQiblaAngle(0)
-      setLocationSource("ip")
-      setLocationError("Location denied. Defaulting to Mecca coordinates.")
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Device orientation / compass sensor states
+  const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
+  const [sensorSupported, setSensorSupported] = useState<boolean | null>(null)
+  const [permissionState, setPermissionState] = useState<"default" | "granted" | "denied">("default")
+  const [isCalibrating, setIsCalibrating] = useState<boolean>(false)
 
-  // Reactive listener for global location changes
+  // Relative angle to face Kaaba = (qiblaBearing - deviceHeading)
+  const relativeAngle = useMemo(() => {
+    if (deviceHeading === null) return null
+    return (qiblaBearing - deviceHeading + 360) % 360
+  }, [qiblaBearing, deviceHeading])
+
+  // Is device currently pointing within ±4 degrees of Qibla?
+  const isAligned = useMemo(() => {
+    if (relativeAngle === null) return false
+    return relativeAngle <= 4 || relativeAngle >= 356
+  }, [relativeAngle])
+
+  // Haptic feedback when aligned
   useEffect(() => {
-    const handleLocationUpdate = () => {
-      const cached = getCachedLocation()
-      if (cached) {
-        setLocation({
-          latitude: cached.latitude,
-          longitude: cached.longitude,
-          city: cached.city,
-          country: cached.country,
-          method: cached.method
-        })
-        const angle = calculateQibla(cached.latitude, cached.longitude)
-        setQiblaAngle(angle)
-        setLocationSource(cached.method || "gps")
-        setLocationError("")
-      }
+    if (isAligned && typeof window !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([40, 30, 40])
     }
-    window.addEventListener("deen_connect_location_updated", handleLocationUpdate)
-    return () => window.removeEventListener("deen_connect_location_updated", handleLocationUpdate)
+  }, [isAligned])
+
+  // Handle sensor listener
+  const handleOrientation = useCallback((event: DeviceOrientationEvent) => {
+    let heading: number | null = null
+
+    // iOS WebKit compass heading (magnetic or true)
+    if ((event as any).webkitCompassHeading !== undefined) {
+      heading = (event as any).webkitCompassHeading
+    } else if (event.alpha !== null) {
+      // Android / Chrome: alpha measures rotation around z-axis
+      // If absolute is available, alpha 0 is North
+      heading = (360 - event.alpha) % 360
+    }
+
+    if (heading !== null && !isNaN(heading)) {
+      setDeviceHeading(Math.round(heading))
+      setSensorSupported(true)
+    }
   }, [])
 
-  // Geocoding query search suggestion effect
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSuggestions([])
-      return
-    }
-    const delayDebounceFn = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const results = await searchLocations(searchQuery)
-        setSuggestions(results)
-        setShowDropdown(results.length > 0)
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setSearching(false)
-      }
-    }, 400)
+  // Start compass sensor
+  const enableCompassSensor = async () => {
+    if (typeof window === "undefined") return
 
-    return () => clearTimeout(delayDebounceFn)
-  }, [searchQuery])
-
-  const handleSelectSuggestion = (suggestion: LocationSuggestion) => {
-    setSearchQuery("")
-    setSuggestions([])
-    setShowDropdown(false)
-    setCachedLocation(
-      suggestion.latitude,
-      suggestion.longitude,
-      suggestion.city || suggestion.name.split(",")[0],
-      suggestion.country || "",
-      "manual"
-    )
-  }
-
-  useEffect(() => {
-    loadLocation(false)
-
-    const handleAbsoluteOrientation = (event: DeviceOrientationEvent) => {
-      handleOrientation(event)
-    }
-
+    // iOS 13+ requires explicit permission request
     if (
-      typeof window !== "undefined" &&
+      typeof (DeviceOrientationEvent as any) !== "undefined" &&
       typeof (DeviceOrientationEvent as any).requestPermission === "function"
     ) {
-      setRequiresInteraction(true)
-    } else {
-      if (typeof window !== "undefined") {
-        if ("ondeviceorientationabsolute" in window) {
-          window.addEventListener("deviceorientationabsolute", handleAbsoluteOrientation)
+      try {
+        const response = await (DeviceOrientationEvent as any).requestPermission()
+        if (response === "granted") {
+          setPermissionState("granted")
+          setSensorSupported(true)
+          window.addEventListener("deviceorientation", handleOrientation, true)
         } else {
-          window.addEventListener("deviceorientation", handleOrientation)
+          setPermissionState("denied")
+          setSensorSupported(false)
         }
+      } catch (e) {
+        console.warn("Sensor permission request failed", e)
+        setPermissionState("denied")
+        setSensorSupported(false)
       }
+      return
+    }
+
+    // Modern browsers with absolute orientation
+    if ("ondeviceorientationabsolute" in window) {
+      window.addEventListener("deviceorientationabsolute", handleOrientation as any, true)
+      setSensorSupported(true)
+      setPermissionState("granted")
+    } else if ("ondeviceorientation" in window) {
+      window.addEventListener("deviceorientation", handleOrientation, true)
+      setSensorSupported(true)
+      setPermissionState("granted")
+    } else {
+      setSensorSupported(false)
+    }
+  }
+
+  // Attempt initial sensor attachment
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    // Only auto-attach if permission is not required (e.g. Android/Chrome)
+    if (
+      typeof (DeviceOrientationEvent as any) !== "undefined" &&
+      typeof (DeviceOrientationEvent as any).requestPermission !== "function"
+    ) {
+      enableCompassSensor()
     }
 
     return () => {
-      if (typeof window !== "undefined") {
-        if ("ondeviceorientationabsolute" in window) {
-          window.removeEventListener("deviceorientationabsolute", handleAbsoluteOrientation)
-        }
-        window.removeEventListener("deviceorientation", handleOrientation)
-      }
+      window.removeEventListener("deviceorientation", handleOrientation)
+      window.removeEventListener("deviceorientationabsolute", handleOrientation as any)
     }
-  }, [])
-
-  // Auto-detect if sensors are actually working. If not after 2 seconds, we fall back to simulated slider.
-  useEffect(() => {
-    if (!loading && !sensorActive && !requiresInteraction) {
-      const timer = setTimeout(() => {
-        if (!sensorActive) {
-          setSimulatedMode(true)
-        }
-      }, 2500)
-      return () => clearTimeout(timer)
-    }
-  }, [loading, sensorActive, requiresInteraction])
-
-  const handleOrientation = (event: DeviceOrientationEvent) => {
-    let heading = 0
-    if ((event as any).webkitCompassHeading !== undefined) {
-      heading = (event as any).webkitCompassHeading
-      setSensorActive(true)
-      setSimulatedMode(false)
-    } else if (event.alpha !== null) {
-      // alpha is 0 to 360, but might count in opposite direction depending on device/OS
-      // Try to estimate or just use alpha directly as orientation fallback
-      heading = 360 - event.alpha
-      setSensorActive(true)
-      setSimulatedMode(false)
-    }
-    setDeviceHeading(heading)
-  }
-
-  const requestSensorPermission = async () => {
-    if (
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof (DeviceOrientationEvent as any).requestPermission === "function"
-    ) {
-      try {
-        const permissionState = await (DeviceOrientationEvent as any).requestPermission()
-        setSensorPermission(permissionState)
-        if (permissionState === "granted") {
-          window.addEventListener("deviceorientation", handleOrientation)
-          setRequiresInteraction(false)
-          setSensorActive(true)
-          setSimulatedMode(false)
-        } else {
-          setSimulatedMode(true)
-        }
-      } catch (err) {
-        console.error("Device orientation permission request failed:", err)
-        setSimulatedMode(true)
-      }
-    } else {
-      if (typeof window !== "undefined") {
-        if ("ondeviceorientationabsolute" in window) {
-          window.addEventListener("deviceorientationabsolute", handleOrientation)
-        } else {
-          window.addEventListener("deviceorientation", handleOrientation)
-        }
-      }
-      setSensorActive(true)
-      setSimulatedMode(false)
-      setRequiresInteraction(false)
-    }
-  }
-
-  const currentHeading = simulatedMode ? simulatedHeading : deviceHeading
-  const relativeAngle = (qiblaAngle - currentHeading + 360) % 360
-
-  // Calculate difference to determine alignment (within 5 degrees)
-  const angleDiff = Math.abs(((currentHeading - qiblaAngle + 540) % 360) - 180)
-  const isAligned = angleDiff < 5
-
-  const meccaDistance = location
-    ? calculateDistance(location.latitude, location.longitude, 21.4225, 39.8262)
-    : 0
+  }, [handleOrientation])
 
   return (
-    <Card className="p-6 bg-gradient-to-br from-background via-accent/5 to-background border-accent/20 max-w-md mx-auto shadow-xl rounded-2xl">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <div>
-          <h3 className="text-2xl font-serif font-bold text-accent">Real-time Qibla Compass</h3>
-          <p className="text-xs text-muted-foreground mt-1">Gyroscope-assisted Kaaba direction finder</p>
-        </div>
-
-        {/* Manual Location Search Bar */}
-        <div className="relative w-full z-20">
-          <div className="relative flex items-center bg-card border border-primary/20 hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 rounded-2xl p-1 transition shadow-sm">
-            <div className="flex items-center pl-3 pr-2 text-muted-foreground">
-              <Search className="w-4 h-4 text-accent" />
-            </div>
-            <input
-              type="text"
-              placeholder="Correct your location/city..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => { if (suggestions.length > 0) setShowDropdown(true) }}
-              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none py-1.5 px-1 rounded-xl"
-            />
-            {searchQuery && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { setSearchQuery(""); setSuggestions([]); setShowDropdown(false) }}
-                className="text-[10px] text-muted-foreground hover:bg-muted rounded-xl px-2 h-7 mr-1"
-              >
-                Clear
-              </Button>
-            )}
-            {searching && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent mr-3" />}
-          </div>
-
-          {/* Suggestion Dropdown */}
-          {showDropdown && suggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-primary/20 rounded-2xl shadow-xl z-50 overflow-hidden divide-y divide-primary/10 max-h-48 overflow-y-auto">
-              {suggestions.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSelectSuggestion(item)}
-                  className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-primary/5 transition flex items-start gap-2"
-                >
-                  <MapPin className="w-3.5 h-3.5 mt-0.5 text-accent flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{item.city || item.name.split(",")[0]}</p>
-                    <p className="text-[10px] text-muted-foreground line-clamp-1">{item.name}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Alignment Indicator */}
-        <div className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-300 ${
-          isAligned 
-            ? "bg-green-500/20 text-green-600 border border-green-500/40 animate-bounce" 
-            : "bg-muted text-muted-foreground"
-        }`}>
-          {isAligned ? "🕋 Facing Qibla! Aligned with Mecca" : "Rotate device to align with Mecca"}
-        </div>
-
-        {/* Compass Visualization */}
-        <div className="relative w-60 h-60 select-none flex items-center justify-center my-2">
-          {/* Green alignment glow */}
-          <div className={`absolute inset-0 rounded-full transition-all duration-500 blur-xl ${
-            isAligned ? "bg-green-500/10 scale-105" : "bg-transparent scale-100"
-          }`} />
-
-          {/* Compass housing / outer dial */}
-          <div
-            className={`absolute w-full h-full rounded-full border-4 bg-card/70 shadow-inner flex items-center justify-center transition-transform duration-150 ease-out ${
-              isAligned ? "border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.15)]" : "border-accent/20"
-            }`}
-            style={{
-              transform: `rotate(${-currentHeading}deg)`,
-            }}
-          >
-            {/* Cardinal points */}
-            <div className="absolute top-2 text-sm font-bold text-rose-600">N</div>
-            <div className="absolute right-2 text-sm font-bold text-foreground">E</div>
-            <div className="absolute bottom-2 text-sm font-bold text-foreground">S</div>
-            <div className="absolute left-2 text-sm font-bold text-foreground">W</div>
-
-            {/* Ordinals */}
-            <div className="absolute top-6 right-6 text-[10px] font-semibold text-muted-foreground">NE</div>
-            <div className="absolute bottom-6 right-6 text-[10px] font-semibold text-muted-foreground">SE</div>
-            <div className="absolute bottom-6 left-6 text-[10px] font-semibold text-muted-foreground">SW</div>
-            <div className="absolute top-6 left-6 text-[10px] font-semibold text-muted-foreground">NW</div>
-
-            {/* Inner degree circle */}
-            <div className="absolute inset-4 rounded-full border border-dashed border-muted-foreground/20" />
-            <div className="absolute inset-8 rounded-full border border-muted-foreground/5" />
-          </div>
-
-          {/* Qibla Needle */}
-          <div
-            className="absolute w-full h-full flex items-center justify-center pointer-events-none transition-transform duration-150 ease-out"
-            style={{
-              transform: `rotate(${qiblaAngle - currentHeading}deg)`,
-            }}
-          >
-            <div className="relative h-full flex flex-col items-center pt-2">
-              <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[24px] border-b-emerald-600 filter drop-shadow-[0_2px_4px_rgba(16,185,129,0.5)]" />
-              <div className="w-1.5 h-28 bg-gradient-to-b from-emerald-600 to-emerald-400 rounded-b-full" />
-              
-              <div className="absolute top-10 bg-emerald-600 text-white font-serif font-bold text-[9px] px-2 py-0.5 rounded-full shadow flex items-center gap-0.5">
-                🕋 QIBLA
-              </div>
-            </div>
-          </div>
-
-          {/* Center Pivot */}
-          <div className="absolute w-8 h-8 rounded-full bg-background border-4 border-accent shadow-md flex items-center justify-center z-10">
-            <div className={`w-2.5 h-2.5 rounded-full transition-colors ${isAligned ? "bg-green-500" : "bg-accent"}`} />
-          </div>
-        </div>
-
-        {/* Readout and details */}
-        <div className="w-full space-y-4">
-          <div className="grid grid-cols-2 gap-2 text-sm bg-muted/40 p-3 rounded-xl">
-            <div className="text-left border-r border-muted px-2">
-              <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Your Heading</p>
-              <p className="text-base font-bold text-foreground mt-0.5">
-                {Math.round(currentHeading)}° {getCompassDirection(currentHeading)}
-              </p>
-            </div>
-            <div className="text-left px-2">
-              <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Qibla Angle</p>
-              <p className="text-base font-bold text-accent mt-0.5">
-                {Math.round(qiblaAngle)}° {getCompassDirection(qiblaAngle)}
-              </p>
-            </div>
-          </div>
-
-          {location && (
-            <div className="text-xs text-muted-foreground space-y-2 border-t border-dashed border-muted-foreground/10 pt-3">
-              <p className="flex justify-between items-center text-left">
-                <span>Current Location:</span>
-                <span className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
-                  {location.city || "Detected City"}
-                  <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                    locationSource === "gps" 
-                      ? "bg-green-500/10 text-green-600 border border-green-500/25" 
-                      : locationSource === "ip"
-                      ? "bg-blue-500/10 text-blue-600 border border-blue-500/25"
-                      : "bg-purple-500/10 text-purple-600 border border-purple-500/25"
-                  }`}>
-                    {locationSource === "gps" && "GPS"}
-                    {locationSource === "ip" && "IP"}
-                    {locationSource === "manual" && "Manual"}
-                  </span>
-                </span>
-              </p>
-              <p className="flex justify-between">
-                <span>Distance to Mecca:</span>
-                <span className="font-semibold text-foreground">{meccaDistance.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>
-              </p>
-              {locationError ? (
-                <p className="text-amber-600 flex items-center justify-center gap-1 mt-1 text-[10px]">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {locationError}
-                </p>
-              ) : (
-                <p className="text-[10px] text-center text-muted-foreground/60">
-                  Coordinates: {location.latitude.toFixed(4)}°, {location.longitude.toFixed(4)}°
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Action buttons or manual simulation slider */}
-          {requiresInteraction && (
-            <Button
-              className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-5 gap-2 rounded-xl"
-              onClick={requestSensorPermission}
+    <div className="space-y-6">
+      {/* 1. Location Bar & Active Position */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-card border border-border/80 shadow-xs">
+        <div className="flex items-center gap-3">
+          <LocationSelectorDialog>
+            <button
+              type="button"
+              className="group flex items-center gap-3 text-left p-1 rounded-2xl hover:bg-muted/50 transition"
             >
-              <Smartphone className="w-4 h-4" />
-              Enable Device Gyroscope
-            </Button>
-          )}
-
-          <Button
-            variant="outline"
-            className="w-full border-primary/20 hover:border-primary/50 text-xs py-3 rounded-xl gap-2 font-semibold"
-            onClick={() => loadLocation(true)}
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-primary" : ""}`} />
-            Refresh Location (GPS)
-          </Button>
-
-          {simulatedMode && (
-            <div className="space-y-2 p-3 bg-accent/5 rounded-xl border border-accent/10">
-              <div className="flex items-center gap-1.5 text-xs text-accent font-semibold justify-center">
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Simulate Compass Rotation (Desktop Mode)</span>
+              <div className="w-10 h-10 rounded-2xl bg-[#123D32]/10 dark:bg-[#C8A96B]/10 border border-[#C8A96B]/30 flex items-center justify-center text-[#123D32] dark:text-[#C8A96B] shrink-0 group-hover:scale-105 transition-transform">
+                <MapPin className="w-5 h-5" />
               </div>
-              <input
-                type="range"
-                min="0"
-                max="359"
-                value={simulatedHeading}
-                onChange={(e) => setSimulatedHeading(Number(e.target.value))}
-                className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-accent"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Move slider to turn your simulated phone direction.
-              </p>
-            </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-serif text-base font-medium text-foreground">
+                    {locationDetails?.city || "Set Your Location"}
+                  </span>
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground group-hover:border group-hover:border-[#C8A96B]/40 transition">
+                    Change
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground line-clamp-1">
+                  {coords
+                    ? `${coords.latitude.toFixed(4)}°N, ${coords.longitude.toFixed(4)}°E • Distance: ${distanceToKaaba.toLocaleString()} km`
+                    : "Coordinates required for exact spherical bearing"}
+                </p>
+              </div>
+            </button>
+          </LocationSelectorDialog>
+        </div>
+
+        {/* Sensor Status / Activation */}
+        <div className="flex items-center gap-2">
+          {sensorSupported === false ? (
+            <span className="text-[11px] font-mono px-3 py-1 rounded-full bg-muted text-muted-foreground border border-border">
+              Static Direction Mode (No Sensor)
+            </span>
+          ) : deviceHeading !== null ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Magnetometer Active
+            </span>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={enableCompassSensor}
+              className="rounded-full text-xs gap-1.5 border-[#C8A96B]/40 text-foreground hover:bg-[#C8A96B]/10"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#C8A96B]" />
+              Enable Device Compass
+            </Button>
           )}
         </div>
       </div>
-    </Card>
+
+      {/* Location Required Prompt */}
+      {!coords && (
+        <div className="p-6 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <h4 className="font-serif text-lg font-medium">Verified Location Required</h4>
+          </div>
+          <p className="text-xs leading-relaxed max-w-xl">
+            The Qibla bearing is computed using spherical great-circle trigonometry directly to the Holy Kaaba (21.4225° N, 39.8262° E). Please enable GPS or select your city to get an accurate bearing.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              size="sm"
+              onClick={() => requestGpsLocation(true)}
+              className="bg-[#123D32] hover:bg-[#174C3D] text-[#F7F5EF] rounded-full text-xs font-semibold"
+            >
+              Detect Exact Coordinates
+            </Button>
+            <LocationSelectorDialog>
+              <Button variant="outline" size="sm" className="rounded-full text-xs border-amber-600/30">
+                Search City
+              </Button>
+            </LocationSelectorDialog>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Main Compass Interactive Display */}
+      {coords && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          {/* Left Column: Visual Compass Dial */}
+          <div className="lg:col-span-7 flex flex-col items-center justify-center py-6">
+            <div className="relative w-72 h-72 sm:w-88 sm:h-88 flex items-center justify-center">
+              {/* Outer Azimuth Degree Ring */}
+              <div
+                className="absolute inset-0 rounded-full border-2 border-border/80 transition-transform duration-300 shadow-lg bg-card/60"
+                style={{
+                  transform: deviceHeading !== null ? `rotate(${-deviceHeading}deg)` : "rotate(0deg)",
+                }}
+              >
+                {/* Cardinal Marks */}
+                <span className="absolute top-2 left-1/2 -translate-x-1/2 font-mono text-xs font-bold text-rose-500">
+                  N
+                </span>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 font-mono text-xs font-bold text-muted-foreground">
+                  S
+                </span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-xs font-bold text-muted-foreground">
+                  E
+                </span>
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs font-bold text-muted-foreground">
+                  W
+                </span>
+
+                {/* Concentric Calibration Ticks */}
+                <div className="absolute inset-4 rounded-full border border-dashed border-border/60" />
+                <div className="absolute inset-10 rounded-full border border-border/40" />
+              </div>
+
+              {/* Kaaba Direction Needle */}
+              <div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none transition-transform duration-500 ease-out"
+                style={{
+                  transform:
+                    deviceHeading !== null
+                      ? `rotate(${relativeAngle}deg)`
+                      : `rotate(${qiblaBearing}deg)`,
+                }}
+              >
+                {/* Arrow pointing to Kaaba */}
+                <div className="relative w-1.5 h-full flex flex-col items-center justify-between py-6">
+                  {/* Top Pointer (Kaaba Indicator) */}
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center shadow-md transition-colors ${
+                        isAligned
+                          ? "bg-emerald-500 text-white scale-125"
+                          : "bg-[#C8A96B] text-[#101A16]"
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold">🕋</span>
+                    </div>
+                    <div
+                      className={`w-1 h-20 rounded-full transition-colors ${
+                        isAligned ? "bg-emerald-500" : "bg-[#C8A96B]"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Opposite Tail */}
+                  <div className="w-1 h-12 bg-muted-foreground/30 rounded-full" />
+                </div>
+              </div>
+
+              {/* Center Hub */}
+              <div className="relative z-10 w-24 h-24 rounded-full bg-card border-2 border-border flex flex-col items-center justify-center shadow-md">
+                <span className="font-mono text-xs font-bold text-foreground">
+                  {deviceHeading !== null ? `${deviceHeading}°` : `${qiblaBearing.toFixed(1)}°`}
+                </span>
+                <span className="text-[10px] font-mono uppercase text-muted-foreground">
+                  {deviceHeading !== null ? "Heading" : getCompassDirection(qiblaBearing)}
+                </span>
+              </div>
+            </div>
+
+            {/* Alignment Badge */}
+            <div className="mt-6 text-center">
+              {isAligned ? (
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 font-medium text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Aligned with the Holy Kaaba in Makkah!</span>
+                </div>
+              ) : deviceHeading !== null ? (
+                <p className="text-xs font-mono text-muted-foreground">
+                  Rotate your device{" "}
+                  <span className="font-bold text-foreground">
+                    {relativeAngle && relativeAngle > 180
+                      ? `${(360 - relativeAngle).toFixed(0)}° Left`
+                      : `${relativeAngle?.toFixed(0)}° Right`}
+                  </span>{" "}
+                  to face Qibla
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Static compass bearing: Face{" "}
+                  <span className="font-semibold text-foreground">
+                    {qiblaBearing.toFixed(1)}° ({getCompassDirection(qiblaBearing)})
+                  </span>{" "}
+                  from True North.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Geographic & Scientific Verification Data */}
+          <div className="lg:col-span-5 space-y-4">
+            <Card className="p-6 rounded-3xl bg-card border-border space-y-4">
+              <h3 className="font-serif text-lg font-medium text-foreground flex items-center gap-2">
+                <Compass className="w-4 h-4 text-[#C8A96B]" />
+                Geodesic Calculations
+              </h3>
+
+              <div className="space-y-3 divide-y divide-border/60 text-xs">
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-muted-foreground">Qibla True Bearing</span>
+                  <span className="font-mono font-semibold text-foreground text-sm">
+                    {qiblaBearing.toFixed(2)}° ({getCompassDirection(qiblaBearing)})
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center pt-3">
+                  <span className="text-muted-foreground">Straight-Line Distance</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {distanceToKaaba.toLocaleString()} km
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center pt-3">
+                  <span className="text-muted-foreground">Target Sanctuary</span>
+                  <span className="font-serif font-medium text-foreground">
+                    Al-Masjid Al-Haram, Makkah
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center pt-3">
+                  <span className="text-muted-foreground">Kaaba Coordinates</span>
+                  <span className="font-mono text-muted-foreground">
+                    {KAABA_COORDINATES.latitude}°N, {KAABA_COORDINATES.longitude}°E
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center pt-3">
+                  <span className="text-muted-foreground">Your Coordinates</span>
+                  <span className="font-mono text-muted-foreground">
+                    {coords.latitude.toFixed(4)}°N, {coords.longitude.toFixed(4)}°E
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Calibration & Sensor Notes */}
+            <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 text-xs text-muted-foreground space-y-1.5 leading-relaxed">
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <Info className="w-3.5 h-3.5 text-[#C8A96B]" />
+                <span>Compass Accuracy & Calibration</span>
+              </div>
+              <p>
+                Hold your device flat like a plate. If the heading drifts, wave the phone in a figure-8 motion away from metal objects, laptop hinges, or magnetic phone cases.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
-

@@ -31,6 +31,7 @@ import {
 import { SiteNav } from "@/components/site-nav"
 import { Button } from "@/components/ui/button"
 import { useAudioPlayer } from "@/components/audio-context"
+import { CompactPrayerHeroCard } from "@/components/compact-prayer-hero-card"
 import LocationPrayerTimes from "@/components/location-prayer-times"
 import DikrCounter from "@/components/dikr-counter"
 
@@ -207,89 +208,9 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right Column: Compact Prayer Information Component (Pure Architectural UI, No Picture) */}
+            {/* Right Column: Compact Prayer Information Component (Real Location & AlAdhan API) */}
             <div className="lg:col-span-5 relative" ref={photoCardRef}>
-              <div className="rounded-3xl border border-[#C8A96B]/30 bg-gradient-to-br from-[#123D32] to-[#174C3D] dark:from-[#174C3D] dark:to-[#101A16] text-[#F7F5EF] p-7 sm:p-8 shadow-[0_20px_50px_rgba(18,61,50,0.18)] space-y-6">
-                {/* Header: Location & Lunar Hijri Date */}
-                <div className="flex items-center justify-between pb-4 border-b border-white/10 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-white/10 border border-[#C8A96B]/30 flex items-center justify-center text-[#C8A96B]">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-serif font-medium text-sm text-[#F7F5EF]">Riyadh, Saudi Arabia</p>
-                      <p className="text-[10px] font-mono text-[#A9B9A7]">Detected via GPS / Network</p>
-                    </div>
-                  </div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#C8A96B]/20 text-[#C8A96B] border border-[#C8A96B]/30">
-                    1447 AH
-                  </span>
-                </div>
-
-                {/* Primary Next Prayer Focus */}
-                <div className="space-y-1.5 py-2">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#A9B9A7]">
-                    Upcoming Obligation
-                  </span>
-                  <div className="flex items-baseline justify-between">
-                    <h3 className="font-serif text-4xl font-light text-[#F7F5EF] tracking-tight">
-                      Asr <span className="text-xl font-arabic text-[#C8A96B]" dir="rtl">العصر</span>
-                    </h3>
-                    <span className="font-mono text-xl text-[#C8A96B] font-medium">
-                      03:32 PM
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#A9B9A7] font-mono">
-                    Time remaining: <span className="text-[#F7F5EF] font-semibold">1 hour 17 minutes</span>
-                  </p>
-                </div>
-
-                {/* 5 Daily Prayers Timetable Grid */}
-                <div className="space-y-2 pt-2 border-t border-white/10">
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[#A9B9A7] uppercase tracking-wider mb-1">
-                    <span>Daily Schedule</span>
-                    <span>Standard ISNA</span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1.5 text-center">
-                    {[
-                      { name: "Fajr", time: "05:12" },
-                      { name: "Dhuhr", time: "12:15" },
-                      { name: "Asr", time: "15:32", active: true },
-                      { name: "Maghrib", time: "17:48" },
-                      { name: "Isha", time: "19:18" },
-                    ].map((p) => (
-                      <div
-                        key={p.name}
-                        className={`py-2 px-1 rounded-xl transition ${
-                          p.active
-                            ? "bg-[#C8A96B] text-[#123D32] font-semibold shadow-sm"
-                            : "bg-white/5 text-[#A9B9A7] hover:bg-white/10"
-                        }`}
-                      >
-                        <p className="text-[9px] uppercase tracking-wider font-mono opacity-80">{p.name}</p>
-                        <p className="text-xs font-mono font-medium mt-0.5">{p.time}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Bottom Quick Action */}
-                <div className="pt-2 flex items-center justify-between text-xs">
-                  <a
-                    href="#prayer-times"
-                    className="text-[#C8A96B] hover:underline flex items-center gap-1 font-medium"
-                  >
-                    View Complete Timetable & Settings →
-                  </a>
-                  <Link
-                    href="/feature?type=qibla"
-                    className="text-[#A9B9A7] hover:text-[#F7F5EF] flex items-center gap-1"
-                  >
-                    <Compass className="w-3.5 h-3.5" />
-                    Qibla
-                  </Link>
-                </div>
-              </div>
+              <CompactPrayerHeroCard />
             </div>
           </div>
         </div>

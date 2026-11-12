@@ -24,9 +24,11 @@ const dailyHadithQuotes = [
   { hadith: "Kindness is a mark of faith.", type: "Hadith" },
 ]
 
-import { getUserLocation, convertTo12Hour } from "@/lib/location"
+import { useLocation } from "@/lib/location-context"
+import { convertTo12Hour } from "@/lib/location"
 
 export default function PrayerReminderSystem() {
+  const { coords, locationDetails, status, requestGpsLocation } = useLocation()
   const [reminders, setReminders] = useState<Reminder[]>([
     { id: "fajr", title: "Fajr Prayer", time: "05:30 AM", enabled: true, type: "prayer" },
     { id: "dhuhr", title: "Dhuhr Prayer", time: "12:30 PM", enabled: true, type: "prayer" },
@@ -105,35 +107,13 @@ export default function PrayerReminderSystem() {
   }
 
   useEffect(() => {
-    const handleLocationUpdate = async () => {
-      try {
-        const location = await getUserLocation()
-        if (location) {
-          setLocationEnabled(true)
-          await fetchAndSyncPrayerTimes(location.latitude, location.longitude)
-        }
-      } catch (err) {
-        console.warn("Could not reload coordinates on event for reminders.", err)
-      }
+    if (coords) {
+      setLocationEnabled(true)
+      fetchAndSyncPrayerTimes(coords.latitude, coords.longitude)
     }
-    window.addEventListener("deen_connect_location_updated", handleLocationUpdate)
-    return () => window.removeEventListener("deen_connect_location_updated", handleLocationUpdate)
-  }, [])
+  }, [coords])
 
   useEffect(() => {
-    const initializeLocation = async () => {
-      try {
-        const location = await getUserLocation()
-        if (location) {
-          setLocationEnabled(true)
-          await fetchAndSyncPrayerTimes(location.latitude, location.longitude)
-        }
-      } catch (err) {
-        console.warn("Could not retrieve cached or fresh coordinates on mount for reminders.", err)
-      }
-    }
-    initializeLocation()
-
     const today = new Date().getDate()
     setTodayHadith(dailyHadithQuotes[today % dailyHadithQuotes.length])
 
@@ -182,13 +162,9 @@ export default function PrayerReminderSystem() {
   }
 
   const requestLocationPermission = async () => {
-    try {
-      const location = await getUserLocation({ enableHighAccuracy: true })
+    const success = await requestGpsLocation(true)
+    if (success) {
       setLocationEnabled(true)
-      await fetchAndSyncPrayerTimes(location.latitude, location.longitude)
-      alert("Location enabled! Prayer times have been updated for your coordinates.")
-    } catch (error: any) {
-      alert("Could not access location: " + (error.message || "Permission denied"))
     }
   }
 

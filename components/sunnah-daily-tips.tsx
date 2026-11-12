@@ -3,157 +3,222 @@
 import React, { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Sparkles, BookOpen } from "lucide-react"
+import {
+  Sparkles,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  Heart,
+  Smile,
+  Utensils,
+  Moon,
+  Droplets,
+  Users,
+  Compass,
+} from "lucide-react"
 
-interface SunnahTip {
+export interface SunnahTradition {
+  id: string
   title: string
+  arabicText?: string
   description: string
   source: string
+  grade: string
   category: string
+  practicalTip: string
 }
 
-const SUNNAH_TIPS: SunnahTip[] = [
+const SUNNAH_TRADITIONS: SunnahTradition[] = [
+  // 1. Daily Life
   {
-    title: "Using Miswak (Natural Tooth Stick)",
-    description:
-      "The Prophet Muhammad (ﷺ) emphasized cleansing teeth with Miswak prior to every prayer. Modern oral biology confirms its antibacterial and gum-strengthening tannins.",
-    source: "Sahih al-Bukhari • 887",
-    category: "Hygiene & Purification",
+    id: "dl-1",
+    title: "Entering and Leaving the Home with Dhikr",
+    arabicText: "بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ، لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ",
+    description: "The Prophet (ﷺ) instructed to say upon stepping outside: 'In the name of Allah, I trust in Allah; there is no power and no strength except with Allah.' An angel responds: 'You are guided, defended, and protected.'",
+    source: "Sunan Abi Dawud • 5095 • Jami' at-Tirmidhi • 3426",
+    grade: "Sahih (Al-Albani)",
+    category: "Daily Life",
+    practicalTip: "Make it a habit at your front doorway before stepping outside.",
+  },
+  // 2. Eating and Drinking
+  {
+    id: "ed-1",
+    title: "Eating with the Right Hand and Mentioning Allah",
+    arabicText: "سَمِّ اللَّهَ، وَكُلْ بِيَمِينِكَ، وَكُلْ مِمَّا يَلِيكَ",
+    description: "The Messenger of Allah (ﷺ) said to Umar ibn Abi Salama: 'Say the name of Allah, eat with your right hand, and eat from what is directly before you.'",
+    source: "Sahih al-Bukhari • 5376 • Sahih Muslim • 2022",
+    grade: "Muttafaq 'Alayh (Authentic Consensus)",
+    category: "Eating and Drinking",
+    practicalTip: "Pause before your first bite to consciously utter 'Bismillah'.",
   },
   {
-    title: "Sleeping on the Right Side",
-    description:
-      "The Prophet (ﷺ) encouraged lying on the right side with the right hand beneath the cheek, aiding respiratory ease and digestive relaxation.",
-    source: "Sahih al-Bukhari • 6315",
-    category: "Rest & Sleep",
-  },
-  {
-    title: "Drinking Water in Three Mindful Breaths",
-    description:
-      "Drinking seated and taking pauses allows the body to absorb hydration without sudden cardiac or gastric strain.",
+    id: "ed-2",
+    title: "Drinking in Three Calming Breaths While Seated",
+    description: "The Messenger of Allah (ﷺ) would breathe outside the vessel three times while drinking, remarking that it is more thirst-quenching, healthier, and wholesome.",
     source: "Sahih Muslim • 2028",
-    category: "Nutrition & Mindful Living",
+    grade: "Sahih",
+    category: "Eating and Drinking",
+    practicalTip: "Sit down when hydrating and sip in three distinct pauses.",
   },
+  // 3. Sleeping
   {
-    title: "Walking to the Congregation",
-    description:
-      "Every step taken toward the house of Allah raises the servant in spiritual station and erases transgression.",
-    source: "Sahih Muslim • 666",
-    category: "Worship & Habit",
+    id: "sl-1",
+    title: "Performing Wudu and Resting on the Right Side",
+    description: "The Prophet (ﷺ) advised: 'When you go to bed, perform ablution as you would for prayer, then lie down on your right side.'",
+    source: "Sahih al-Bukhari • 247 • Sahih Muslim • 2710",
+    grade: "Muttafaq 'Alayh",
+    category: "Sleeping",
+    practicalTip: "Recite Ayat al-Kursi and the last two verses of Al-Baqarah before sleeping.",
   },
+  // 4. Cleanliness
   {
-    title: "Initiating the Greeting of Peace (Salam)",
-    description:
-      "Greeting believers with 'Assalamu Alaikum' fosters communal harmony, diffuses resentment, and spreads peace across the Ummah.",
-    source: "Sahih Muslim • 54",
-    category: "Character & Etiquette",
+    id: "cl-1",
+    title: "Using the Miswak (Natural Tooth-Stick)",
+    description: "The Messenger of Allah (ﷺ) said: 'Were it not that I would overburden my community, I would have ordered them to use the miswak before every prayer.'",
+    source: "Sahih al-Bukhari • 887 • Sahih Muslim • 252",
+    grade: "Muttafaq 'Alayh",
+    category: "Cleanliness",
+    practicalTip: "Maintain oral purity throughout the day, especially before Salah.",
   },
+  // 5. Kindness
   {
+    id: "kn-1",
     title: "Smiling as Voluntary Charity (Sadaqah)",
-    description:
-      "A radiant, genuine smile extended toward your brother or sister is recorded with Allah as an act of voluntary charity.",
+    arabicText: "تَبَسُّمُكَ فِي وَجْهِ أَخِيكَ لَكَ صَدَقَةٌ",
+    description: "The Prophet (ﷺ) said: 'Your smiling in the face of your brother is charity for you.'",
     source: "Jami' at-Tirmidhi • 1956",
-    category: "Character & Kindness",
+    grade: "Sahih (Al-Albani)",
+    category: "Kindness",
+    practicalTip: "Greet family members and strangers with an open, genuine countenance.",
+  },
+  // 6. Worship
+  {
+    id: "ws-1",
+    title: "Offering Two Rak'ahs of Duha (Mid-Morning Prayer)",
+    description: "The Prophet (ﷺ) recommended praying the Duha voluntary prayer, which serves as daily gratitude for each of the 360 joints in the human body.",
+    source: "Sahih Muslim • 720",
+    grade: "Sahih",
+    category: "Worship",
+    practicalTip: "Pray 2 or 4 rak'ahs roughly 20 minutes after sunrise until before Dhuhr.",
+  },
+  // 7. Social Conduct
+  {
+    id: "sc-1",
+    title: "Spreading the Greeting of Peace (Salam)",
+    arabicText: "أَفْشُوا السَّلَامَ بَيْنَكُمْ",
+    description: "The Messenger of Allah (ﷺ) stated: 'You will not enter Paradise until you believe, and you will not believe until you love one another. Shall I guide you to something which, if done, will foster mutual love? Spread peace (salam) among yourselves.'",
+    source: "Sahih Muslim • 54",
+    grade: "Sahih",
+    category: "Social Conduct",
+    practicalTip: "Initiate greetings with people you know and those you do not know.",
+  },
+  // 8. Personal Character
+  {
+    id: "pc-1",
+    title: "Restraining Anger and Exercising Self-Control",
+    description: "A man asked the Prophet (ﷺ): 'Advise me.' The Prophet repeated three times: 'Do not become angry.' He also taught that the truly strong person is the one who controls himself during fury.",
+    source: "Sahih al-Bukhari • 6114 • 6116",
+    grade: "Sahih",
+    category: "Personal Character",
+    practicalTip: "When feeling anger rise, seek refuge with Allah ('A'udhu billah') and change your posture.",
   },
 ]
 
+const CATEGORIES = [
+  "All Categories",
+  "Daily Life",
+  "Eating and Drinking",
+  "Sleeping",
+  "Cleanliness",
+  "Kindness",
+  "Worship",
+  "Social Conduct",
+  "Personal Character",
+]
+
 export default function SunnahDailyTips() {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const currentTip = SUNNAH_TIPS[currentIndex]
+  const [selectedCategory, setSelectedCategory] = useState("All Categories")
+
+  const filtered =
+    selectedCategory === "All Categories"
+      ? SUNNAH_TRADITIONS
+      : SUNNAH_TRADITIONS.filter((t) => t.category === selectedCategory)
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Editorial Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-border">
-        <div>
-          <span className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-            Prophetic Traditions • Sunnah
-          </span>
-          <h2 className="text-3xl font-serif text-foreground font-normal mt-0.5">
-            Daily Sunnah Habits & Etiquettes
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-            Timeless Prophetic practices that cultivate health, mindfulness, and noble character.
-          </p>
-        </div>
-      </div>
-
-      {/* Featured Story Card */}
-      <Card className="p-8 sm:p-10 border-border bg-gradient-to-br from-card via-card to-muted/20 rounded-3xl space-y-6 shadow-xs">
-        <div className="flex items-center justify-between border-b border-border/60 pb-4">
-          <span className="px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider bg-[#123D32]/10 dark:bg-[#C8A96B]/20 text-[#123D32] dark:text-[#C8A96B] font-semibold">
-            {currentTip.category}
-          </span>
-          <span className="text-xs font-mono text-muted-foreground">
-            {currentIndex + 1} of {SUNNAH_TIPS.length}
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          <h3 className="font-serif text-2xl sm:text-3xl font-light text-foreground">
-            {currentTip.title}
-          </h3>
-          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-2xl">
-            {currentTip.description}
-          </p>
-          <p className="text-xs font-mono text-[#C8A96B] font-semibold pt-1">
-            {currentTip.source}
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between pt-6 border-t border-border/60">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentIndex((prev) => (prev - 1 + SUNNAH_TIPS.length) % SUNNAH_TIPS.length)}
-            className="rounded-full text-xs gap-1 border-border"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" /> Previous
-          </Button>
-
-          <div className="flex items-center gap-1.5">
-            {SUNNAH_TIPS.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentIndex(idx)}
-                className={`h-1.5 rounded-full transition-all ${
-                  idx === currentIndex ? "w-6 bg-[#C8A96B]" : "w-1.5 bg-muted-foreground/30"
-                }`}
-              />
-            ))}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentIndex((prev) => (prev + 1) % SUNNAH_TIPS.length)}
-            className="rounded-full text-xs gap-1 border-border"
-          >
-            Next <ChevronRight className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </Card>
-
-      {/* Grid of All Sunnah Habits */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-        {SUNNAH_TIPS.map((tip, idx) => (
+    <div className="space-y-6">
+      {/* Category Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        {CATEGORIES.map((cat) => (
           <button
-            key={idx}
-            onClick={() => setCurrentIndex(idx)}
-            className={`p-4 rounded-2xl border text-left transition space-y-1.5 ${
-              idx === currentIndex
-                ? "bg-[#123D32] text-[#F7F5EF] border-[#123D32] dark:bg-[#174C3D] shadow-xs"
-                : "bg-card border-border hover:border-[#C8A96B]/50 hover:bg-muted/50 text-foreground"
+            key={cat}
+            type="button"
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition border ${
+              selectedCategory === cat
+                ? "bg-[#123D32] text-[#F7F5EF] border-[#C8A96B] dark:bg-[#C8A96B] dark:text-[#101A16] shadow-xs font-semibold"
+                : "bg-card border-border text-muted-foreground hover:text-foreground"
             }`}
           >
-            <span className={`text-[10px] font-mono uppercase tracking-wider ${idx === currentIndex ? "text-[#C8A96B]" : "text-muted-foreground"}`}>
-              {tip.category}
-            </span>
-            <h4 className="font-serif font-medium text-sm line-clamp-1">{tip.title}</h4>
-            <p className={`text-xs line-clamp-2 ${idx === currentIndex ? "text-[#A9B9A7]" : "text-muted-foreground"}`}>
-              {tip.description}
-            </p>
+            {cat}
           </button>
+        ))}
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-1">
+        <div>
+          <h3 className="font-serif text-2xl font-normal text-foreground">
+            Prophetic Sunnah Etiquettes
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Authentic practical habits from the life of Prophet Muhammad (ﷺ) with verified references.
+          </p>
+        </div>
+        <span className="text-xs font-mono text-muted-foreground">
+          {filtered.length} Traditions
+        </span>
+      </div>
+
+      {/* Traditions Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filtered.map((item) => (
+          <Card
+            key={item.id}
+            className="p-6 rounded-3xl bg-card border border-border hover:border-[#C8A96B]/50 transition-all space-y-4 shadow-xs hover:shadow-md flex flex-col justify-between"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-muted font-semibold">
+                  {item.category}
+                </span>
+                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                  {item.grade}
+                </span>
+              </div>
+
+              <h4 className="font-serif text-lg font-medium text-foreground">{item.title}</h4>
+
+              {item.arabicText && (
+                <div className="p-3 rounded-2xl bg-muted/40 border border-border/60 text-right">
+                  <p className="font-arabic text-lg text-[#123D32] dark:text-[#C8A96B]" dir="rtl">
+                    {item.arabicText}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-xs sm:text-sm text-foreground/90 font-sans leading-relaxed">
+                {item.description}
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-3 border-t border-border/60">
+              <div className="p-2.5 rounded-xl bg-muted/30 border border-border/40 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Practical Living:</span> {item.practicalTip}
+              </div>
+              <p className="text-[11px] font-mono text-muted-foreground">{item.source}</p>
+            </div>
+          </Card>
         ))}
       </div>
     </div>
